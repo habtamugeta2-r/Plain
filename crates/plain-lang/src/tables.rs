@@ -56,7 +56,15 @@ fn def(
     needs_name: bool,
     layout: Layout,
 ) -> ElementDef {
-    ElementDef { name, tag, role, void, inline, needs_name, layout }
+    ElementDef {
+        name,
+        tag,
+        role,
+        void,
+        inline,
+        needs_name,
+        layout,
+    }
 }
 
 const TEXT: ArgRole = ArgRole::Content;
@@ -66,12 +74,59 @@ const HREF: ArgRole = ArgRole::Href;
 
 /// Every element name Plain v0.1 knows, in documentation order.
 pub const ELEMENT_NAMES: &[&str] = &[
-    "text", "heading", "strong", "emphasis", "code", "badge", "time", "quote", "pre", "caption",
-    "label", "summary", "box", "stack", "row", "grid", "layer", "section", "nav", "header",
-    "footer", "main", "aside", "article", "figure", "details", "divider", "break", "spacer",
-    "image", "video", "audio", "canvas", "link", "button", "input", "check", "radio", "slider",
-    "toggle", "select", "option", "textarea", "form", "progress", "skeleton", "modal", "list",
-    "numbered-list", "item", "table", "table-row", "table-cell",
+    "text",
+    "heading",
+    "strong",
+    "emphasis",
+    "code",
+    "badge",
+    "time",
+    "quote",
+    "pre",
+    "caption",
+    "label",
+    "summary",
+    "box",
+    "stack",
+    "row",
+    "grid",
+    "layer",
+    "section",
+    "nav",
+    "header",
+    "footer",
+    "main",
+    "aside",
+    "article",
+    "figure",
+    "details",
+    "divider",
+    "break",
+    "spacer",
+    "image",
+    "video",
+    "audio",
+    "canvas",
+    "link",
+    "button",
+    "input",
+    "check",
+    "radio",
+    "slider",
+    "toggle",
+    "select",
+    "option",
+    "textarea",
+    "form",
+    "progress",
+    "skeleton",
+    "modal",
+    "list",
+    "numbered-list",
+    "item",
+    "table",
+    "table-row",
+    "table-cell",
 ];
 
 /// Looks an element up by name. `None` means the name is not a built-in, so
@@ -151,7 +206,9 @@ pub fn is_text_element(name: &str) -> bool {
 }
 
 /// Elements that accept `bind`.
-pub const BINDABLE: &[&str] = &["input", "check", "radio", "slider", "select", "toggle", "textarea"];
+pub const BINDABLE: &[&str] = &[
+    "input", "check", "radio", "slider", "select", "toggle", "textarea",
+];
 
 /// Boolean modifiers that may appear on an element line.
 pub const MODIFIERS: &[&str] = &[
@@ -375,7 +432,10 @@ pub const DEFERRED: &[(&str, &str)] = &[
     ("fetch", "data fetching lands in v0.2"),
     ("stream", "real-time data lands in v0.2"),
     ("validate", "declarative validation lands in v0.2"),
-    ("match", "pattern matching lands in v0.2; use if/else for now"),
+    (
+        "match",
+        "pattern matching lands in v0.2; use if/else for now",
+    ),
     ("import", "multi-file imports land in v0.2"),
     ("export", "multi-file imports land in v0.2"),
     ("global", "cross-component state lands in v0.2"),
@@ -400,16 +460,29 @@ pub fn deferred(name: &str) -> Option<&'static str> {
 
 /// Theme token categories, in the order they are searched when a property does
 /// not name one explicitly.
-pub const THEME_CATEGORIES: &[&str] =
-    &["colors", "fonts", "sizes", "spacing", "radius", "shadows", "breakpoints"];
+pub const THEME_CATEGORIES: &[&str] = &[
+    "colors",
+    "fonts",
+    "sizes",
+    "spacing",
+    "radius",
+    "shadows",
+    "breakpoints",
+];
 
 /// Which theme category a CSS property draws its tokens from.
 pub fn token_category(property: &str) -> &'static str {
     match property {
-        "color" | "background" | "background-color" | "border-color" | "outline-color"
-        | "svg-fill" | "svg-stroke" | "caret-color" | "text-decoration-color" | "accent-color" => {
-            "colors"
-        }
+        "color"
+        | "background"
+        | "background-color"
+        | "border-color"
+        | "outline-color"
+        | "svg-fill"
+        | "svg-stroke"
+        | "caret-color"
+        | "text-decoration-color"
+        | "accent-color" => "colors",
         "font-family" | "font" => "fonts",
         "font-size" => "sizes",
         "border-radius" | "radius" => "radius",
@@ -538,11 +611,52 @@ pub fn css_property(name: &str) -> String {
 
 /// Properties that become HTML attributes rather than CSS declarations.
 pub const ATTRIBUTES: &[&str] = &[
-    "id", "class", "role", "title", "name", "for", "action", "method", "target", "rel", "lang",
-    "dir", "tabindex", "colspan", "rowspan", "scope", "datetime", "loading", "decoding", "srcset",
-    "sizes", "poster", "preload", "autocomplete", "pattern", "maxlength", "minlength", "min",
-    "max", "step", "placeholder", "label", "alt", "href", "to", "src", "value", "live", "describe",
-    "test", "level", "download", "draggable", "spellcheck", "enterkeyhint", "inputmode",
+    "id",
+    "class",
+    "role",
+    "title",
+    "name",
+    "for",
+    "action",
+    "method",
+    "target",
+    "rel",
+    "lang",
+    "dir",
+    "tabindex",
+    "colspan",
+    "rowspan",
+    "scope",
+    "datetime",
+    "loading",
+    "decoding",
+    "srcset",
+    "sizes",
+    "poster",
+    "preload",
+    "autocomplete",
+    "pattern",
+    "maxlength",
+    "minlength",
+    "min",
+    "max",
+    "step",
+    "placeholder",
+    "label",
+    "alt",
+    "href",
+    "to",
+    "src",
+    "value",
+    "live",
+    "describe",
+    "test",
+    "level",
+    "download",
+    "draggable",
+    "spellcheck",
+    "enterkeyhint",
+    "inputmode",
 ];
 
 /// True when `property` is an HTML attribute on `element`.
@@ -556,7 +670,10 @@ pub fn is_attribute(element: &str, property: &str) -> bool {
         return matches!(element, "textarea");
     }
     if property == "value" {
-        return matches!(element, "option" | "input" | "check" | "radio" | "slider" | "progress");
+        return matches!(
+            element,
+            "option" | "input" | "check" | "radio" | "slider" | "progress"
+        );
     }
     ATTRIBUTES.contains(&property)
 }
@@ -750,10 +867,16 @@ mod tests {
     #[test]
     fn reserved_words_are_not_elements() {
         for word in RESERVED {
-            assert!(element(word).is_none(), "{word} is both reserved and an element");
+            assert!(
+                element(word).is_none(),
+                "{word} is both reserved and an element"
+            );
         }
         for word in MODIFIERS {
-            assert!(element(word).is_none(), "{word} is both a modifier and an element");
+            assert!(
+                element(word).is_none(),
+                "{word} is both a modifier and an element"
+            );
         }
     }
 
@@ -768,7 +891,10 @@ mod tests {
         assert!(is_attribute("input", "placeholder"));
         assert!(!is_attribute("box", "placeholder"));
         assert!(is_attribute("textarea", "rows"));
-        assert!(!is_attribute("grid", "rows"), "rows on a grid is grid-template-rows");
+        assert!(
+            !is_attribute("grid", "rows"),
+            "rows on a grid is grid-template-rows"
+        );
         assert!(is_attribute("option", "value"));
     }
 

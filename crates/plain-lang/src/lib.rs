@@ -62,7 +62,10 @@ pub struct Bundle {
 impl Bundle {
     /// Looks an output file up by name.
     pub fn get(&self, name: &str) -> Option<&str> {
-        self.files.iter().find(|(n, _)| n == name).map(|(_, c)| c.as_str())
+        self.files
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, c)| c.as_str())
     }
 
     /// Adds an output file.
@@ -121,6 +124,9 @@ mod tests {
     fn lexing_reports_every_problem_not_just_the_first() {
         let mut sources = SourceMap::new();
         let (_, errors) = lex_source(&mut sources, "bad.pln", "text {a};\n<div>\n");
-        assert!(errors.len() >= 3, "expected several diagnostics, got {errors:?}");
+        assert!(
+            errors.len() >= 3,
+            "expected several diagnostics, got {errors:?}"
+        );
     }
 }

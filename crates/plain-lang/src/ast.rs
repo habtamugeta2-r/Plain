@@ -280,7 +280,12 @@ pub struct StyleProp {
 
 impl StyleProp {
     pub fn new(span: Span, name: String, values: Vec<Expr>) -> Self {
-        StyleProp { span, name, values, dynamic: false }
+        StyleProp {
+            span,
+            name,
+            values,
+            dynamic: false,
+        }
     }
 
     /// True when every value is a compile-time constant, so the property can
@@ -302,7 +307,12 @@ pub struct AttrProp {
 
 impl AttrProp {
     pub fn new(span: Span, name: String, values: Vec<Expr>) -> Self {
-        AttrProp { span, name, values, dynamic: false }
+        AttrProp {
+            span,
+            name,
+            values,
+            dynamic: false,
+        }
     }
 
     pub fn is_static(&self) -> bool {
@@ -430,8 +440,10 @@ impl TypeRef {
             TypeRef::Optional(inner, _) => format!("{}?", inner.describe()),
             TypeRef::List(inner, _) => format!("[{}]", inner.describe()),
             TypeRef::Record(fields, _) => {
-                let parts: Vec<String> =
-                    fields.iter().map(|(k, v)| format!("{k}: {}", v.describe())).collect();
+                let parts: Vec<String> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {}", v.describe()))
+                    .collect();
                 format!("record({})", parts.join(", "))
             }
             TypeRef::Union(options, _) => {
@@ -560,7 +572,11 @@ mod tests {
     #[test]
     fn root_name_walks_chains() {
         let chain = Expr::Index(
-            Box::new(Expr::Member(Box::new(name("user")), "tags".into(), Span::point(0))),
+            Box::new(Expr::Member(
+                Box::new(name("user")),
+                "tags".into(),
+                Span::point(0),
+            )),
             Box::new(Expr::Int(0, Span::point(0))),
             Span::point(0),
         );

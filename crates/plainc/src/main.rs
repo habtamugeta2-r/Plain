@@ -14,7 +14,10 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some(command) => {
-            eprintln!("plain: unknown command `{command}`\n\n{}", plain_lang::cli::USAGE);
+            eprintln!(
+                "plain: unknown command `{command}`\n\n{}",
+                plain_lang::cli::USAGE
+            );
             ExitCode::from(2)
         }
     }

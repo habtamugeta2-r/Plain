@@ -156,16 +156,36 @@ mod tests {
 
     #[test]
     fn the_runtime_is_embedded_and_is_a_module() {
-        assert!(RUNTIME.len() > 5_000, "runtime looks truncated: {} bytes", RUNTIME.len());
-        assert!(RUNTIME.contains("export function signal"), "missing signal()");
+        assert!(
+            RUNTIME.len() > 5_000,
+            "runtime looks truncated: {} bytes",
+            RUNTIME.len()
+        );
+        assert!(
+            RUNTIME.contains("export function signal"),
+            "missing signal()"
+        );
         assert!(RUNTIME.contains("export function each"), "missing each()");
-        assert!(RUNTIME.contains("export const P ="), "missing the P namespace");
-        assert!(!RUNTIME.contains("innerHTML"), "the runtime must never assign innerHTML");
+        assert!(
+            RUNTIME.contains("export const P ="),
+            "missing the P namespace"
+        );
+        assert!(
+            !RUNTIME.contains("innerHTML"),
+            "the runtime must never assign innerHTML"
+        );
     }
 
     #[test]
     fn base_css_declares_the_layout_primitives() {
-        for class in [".pl-stack", ".pl-row", ".pl-grid", ".pl-layer", ".pl-root", ".pl-skip"] {
+        for class in [
+            ".pl-stack",
+            ".pl-row",
+            ".pl-grid",
+            ".pl-layer",
+            ".pl-root",
+            ".pl-skip",
+        ] {
             assert!(BASE_CSS.contains(class), "base CSS is missing {class}");
         }
         assert!(BASE_CSS.contains("prefers-reduced-motion"));
