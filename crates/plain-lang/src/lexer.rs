@@ -266,7 +266,14 @@ impl Lexer {
                     }
                     content += 1;
                 }
-                out.push(Line { start, end, indent, content, tab, tab_at });
+                out.push(Line {
+                    start,
+                    end,
+                    indent,
+                    content,
+                    tab,
+                    tab_at,
+                });
                 start = index + 1;
             }
             if at_end {
@@ -427,7 +434,11 @@ impl Lexer {
             break;
         }
         let text: String = self.chars[start..self.pos].iter().collect();
-        self.push(Token::simple(TokenKind::Name, self.span(start, self.pos), text));
+        self.push(Token::simple(
+            TokenKind::Name,
+            self.span(start, self.pos),
+            text,
+        ));
     }
 
     fn lex_number(&mut self, end: usize) {
@@ -451,7 +462,8 @@ impl Lexer {
         }
         let digits_end = self.pos;
         let unit_start = self.pos;
-        if self.pos < end && (self.chars[self.pos] == '%' || self.chars[self.pos].is_ascii_alphabetic())
+        if self.pos < end
+            && (self.chars[self.pos] == '%' || self.chars[self.pos].is_ascii_alphabetic())
         {
             while self.pos < end
                 && (self.chars[self.pos].is_ascii_alphanumeric() || self.chars[self.pos] == '%')
@@ -630,7 +642,10 @@ impl Lexer {
             .suggest("Add a `\"` at the end of the line.");
             flush!();
         }
-        self.push_simple(TokenKind::StrEnd, self.span_at(self.pos.min(self.chars.len())));
+        self.push_simple(
+            TokenKind::StrEnd,
+            self.span_at(self.pos.min(self.chars.len())),
+        );
     }
 
     /// Finds the `)` matching an already-consumed `(`, skipping over strings.
@@ -665,7 +680,11 @@ impl Lexer {
     fn lex_operator(&mut self, end: usize) {
         let start = self.pos;
         let ch = self.chars[self.pos];
-        let next = if self.pos + 1 < end { Some(self.chars[self.pos + 1]) } else { None };
+        let next = if self.pos + 1 < end {
+            Some(self.chars[self.pos + 1])
+        } else {
+            None
+        };
         let (kind, length) = match (ch, next) {
             ('=', Some('>')) => (TokenKind::Arrow, 2),
             ('=', Some('=')) => (TokenKind::EqEq, 2),
@@ -700,7 +719,11 @@ impl Lexer {
             ('&', Some('&')) | ('|', Some('|')) => {
                 let name = if ch == '&' { "and" } else { "or" };
                 self.pos += 2;
-                self.push(Token::simple(TokenKind::Name, self.span(start, self.pos), name));
+                self.push(Token::simple(
+                    TokenKind::Name,
+                    self.span(start, self.pos),
+                    name,
+                ));
                 return;
             }
             ('|', _) => (TokenKind::Pipe, 1),
@@ -750,9 +773,8 @@ impl Lexer {
     }
 
     fn error(&mut self, code: &str, title: impl Into<String>, span: Span) -> &mut Self {
-        self.errors.push(
-            Diagnostic::error(code, title, self.file).with_label(span, String::new()),
-        );
+        self.errors
+            .push(Diagnostic::error(code, title, self.file).with_label(span, String::new()));
         self
     }
 
@@ -896,7 +918,11 @@ mod tests {
         assert_eq!(texts("count - 1"), vec!["count"]);
         let (_, errors) = lex_source("count-1");
         assert!(errors.is_empty());
-        assert_eq!(texts("count-1"), vec!["count-1"], "a tight hyphen continues the name");
+        assert_eq!(
+            texts("count-1"),
+            vec!["count-1"],
+            "a tight hyphen continues the name"
+        );
     }
 
     #[test]
@@ -916,11 +942,22 @@ mod tests {
             .collect();
         assert_eq!(
             lengths,
-            vec![(12.0, "px".into()), (1.5, "rem".into()), (100.0, "%".into())]
+            vec![
+                (12.0, "px".into()),
+                (1.5, "rem".into()),
+                (100.0, "%".into())
+            ]
         );
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Int && t.value == 42.0));
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Float && t.value == 3.14));
-        assert_eq!(tokens.iter().filter(|t| t.kind == TokenKind::Color).count(), 2);
+        assert!(tokens
+            .iter()
+            .any(|t| t.kind == TokenKind::Int && t.value == 42.0));
+        assert!(tokens
+            .iter()
+            .any(|t| t.kind == TokenKind::Float && t.value == 3.14));
+        assert_eq!(
+            tokens.iter().filter(|t| t.kind == TokenKind::Color).count(),
+            2
+        );
     }
 
     #[test]
@@ -1011,7 +1048,10 @@ mod tests {
         let (tokens, errors) = lex_source(source);
         assert!(errors.is_empty(), "{errors:?}");
         let name = tokens.iter().find(|token| token.text == "count").unwrap();
-        assert_eq!(&source[name.span.start as usize..name.span.end as usize], "count");
+        assert_eq!(
+            &source[name.span.start as usize..name.span.end as usize],
+            "count"
+        );
     }
 
     #[test]
@@ -1020,9 +1060,7 @@ mod tests {
         let (tokens, errors) = lex_source(source);
         assert!(errors.is_empty(), "{errors:?}");
         let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind).collect();
-        let count = |wanted: TokenKind| {
-            kinds.iter().filter(|kind| **kind == wanted).count()
-        };
+        let count = |wanted: TokenKind| kinds.iter().filter(|kind| **kind == wanted).count();
         // The inner string is lexed inline, so it gets its own StrStart/StrEnd
         // rather than being re-lexed from a copied substring.
         assert_eq!(count(TokenKind::StrStart), 2);
@@ -1066,7 +1104,9 @@ mod tests {
         let (tokens, errors) = lex_source("text \"oops\nbox\n");
         assert!(errors.iter().any(|e| e.code == "E003"), "{errors:?}");
         // Lexing continues, so the next line still produces tokens.
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Name && t.text == "box"));
+        assert!(tokens
+            .iter()
+            .any(|t| t.kind == TokenKind::Name && t.text == "box"));
     }
 
     #[test]

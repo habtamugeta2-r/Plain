@@ -692,7 +692,8 @@ word-spacing writing-mode x y z-index zoom
 /// properties at the start of a line, but they do not end an inline value list,
 /// so `display flex` reads as one property with one value rather than two
 /// properties with none.
-pub const VALUE_UNSAFE_PROPERTIES: &[&str] = &["flex", "grid", "content", "contain", "table", "list"];
+pub const VALUE_UNSAFE_PROPERTIES: &[&str] =
+    &["flex", "grid", "content", "contain", "table", "list"];
 
 /// Looks a CSS property up in the allowlist.
 pub fn is_css_property(name: &str) -> bool {
@@ -717,10 +718,44 @@ pub fn is_property(name: &str) -> bool {
 /// and `not` are reserved but are also ordinary values and operators, so they
 /// must never terminate a value list.
 pub const ITEM_KEYWORDS: &[&str] = &[
-    "on", "when", "bind", "show", "key", "if", "else", "each", "in", "then", "let", "derive",
-    "fn", "children", "slot", "return", "persist", "match", "route", "layout", "guard", "fetch",
-    "stream", "validate", "global", "shared", "import", "export", "debug", "assert", "catch",
-    "fallback", "enter", "exit", "await", "async", "component", "theme",
+    "on",
+    "when",
+    "bind",
+    "show",
+    "key",
+    "if",
+    "else",
+    "each",
+    "in",
+    "then",
+    "let",
+    "derive",
+    "fn",
+    "children",
+    "slot",
+    "return",
+    "persist",
+    "match",
+    "route",
+    "layout",
+    "guard",
+    "fetch",
+    "stream",
+    "validate",
+    "global",
+    "shared",
+    "import",
+    "export",
+    "debug",
+    "assert",
+    "catch",
+    "fallback",
+    "enter",
+    "exit",
+    "await",
+    "async",
+    "component",
+    "theme",
 ];
 
 /// True when `name` always ends a value list and starts a new item.
@@ -789,7 +824,9 @@ pub fn edit_distance(a: &[char], b: &[char]) -> usize {
         current[0] = i;
         for j in 1..=b.len() {
             let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
-            current[j] = (previous[j] + 1).min(current[j - 1] + 1).min(previous[j - 1] + cost);
+            current[j] = (previous[j] + 1)
+                .min(current[j - 1] + 1)
+                .min(previous[j - 1] + cost);
         }
         std::mem::swap(&mut previous, &mut current);
     }
@@ -1051,7 +1088,13 @@ mod tests {
             assert!(!starts_a_new_item(value), "{value} should stay a value");
         }
         // Ordinary CSS values that are not property names.
-        for value in ["line-through", "space-between", "system-ui", "flex-start", "solid"] {
+        for value in [
+            "line-through",
+            "space-between",
+            "system-ui",
+            "flex-start",
+            "solid",
+        ] {
             assert!(!starts_a_new_item(value), "{value} should stay a value");
         }
     }

@@ -118,7 +118,13 @@ struct Parser {
 
 impl Parser {
     fn new(file: FileId, tokens: Vec<Token>) -> Self {
-        Parser { file, tokens, pos: 0, errors: Vec::new(), deferred: Vec::new() }
+        Parser {
+            file,
+            tokens,
+            pos: 0,
+            errors: Vec::new(),
+            deferred: Vec::new(),
+        }
     }
 
     // -- token access ------------------------------------------------------
@@ -167,7 +173,11 @@ impl Parser {
             return Some(self.advance());
         }
         let found = self.peek().clone();
-        self.error("E101", format!("expected {what}, found {}", found.describe()), found.span);
+        self.error(
+            "E101",
+            format!("expected {what}, found {}", found.describe()),
+            found.span,
+        );
         None
     }
 
@@ -234,9 +244,7 @@ impl Parser {
             return false;
         }
         let name = self.peek().text.as_str();
-        if tables::element(name).is_some()
-            || is_component_name(name)
-            || is_statement_keyword(name)
+        if tables::element(name).is_some() || is_component_name(name) || is_statement_keyword(name)
         {
             return false;
         }
@@ -291,11 +299,19 @@ impl Parser {
     /// than a syntax error that implies the writer made a mistake.
     fn deferred_node(&mut self, keyword: &str, span: Span) -> Node {
         let message = tables::deferred(keyword).unwrap_or("this lands in a later version");
-        let found = DeferredUse { span, keyword: keyword.to_string(), message: message.to_string() };
+        let found = DeferredUse {
+            span,
+            keyword: keyword.to_string(),
+            message: message.to_string(),
+        };
         self.deferred.push(found.clone());
-        self.error("E900", format!("`{keyword}` is not implemented in Plain v0.1"), span)
-            .note(message.to_string())
-            .suggest("See docs/11-roadmap.md for what v0.1 covers.");
+        self.error(
+            "E900",
+            format!("`{keyword}` is not implemented in Plain v0.1"),
+            span,
+        )
+        .note(message.to_string())
+        .suggest("See docs/11-roadmap.md for what v0.1 covers.");
         Node::Deferred(found)
     }
 
@@ -429,7 +445,8 @@ impl Parser {
 
         // A type alias looks like `type Name = ...`. `type` is also an HTML
         // attribute, so this shape is checked before anything else.
-        if name == "type" && self.at(1).kind == TokenKind::Name && self.at(2).kind == TokenKind::Eq {
+        if name == "type" && self.at(1).kind == TokenKind::Name && self.at(2).kind == TokenKind::Eq
+        {
             self.skip_line();
             return Some(self.deferred_node("type", span));
         }
@@ -448,12 +465,8 @@ impl Parser {
             }
             "slot" => self.parse_slot(),
             "persist" => {
-                self.error(
-                    "E187",
-                    "`persist` is written at the end of a `let`",
-                    span,
-                )
-                .suggest("let count = 0 persist \"counter\"");
+                self.error("E187", "`persist` is written at the end of a `let`", span)
+                    .suggest("let count = 0 persist \"counter\"");
                 self.skip_line();
                 None
             }
@@ -464,7 +477,11 @@ impl Parser {
                 None
             }
             "component" => {
-                self.error("E110", "`component` must be at the top level of a file", span);
+                self.error(
+                    "E110",
+                    "`component` must be at the top level of a file",
+                    span,
+                );
                 self.skip_line();
                 self.skip_block();
                 None
@@ -510,7 +527,10 @@ impl Parser {
         };
         self.check_identifier(&name_token);
         let ty = self.parse_optional_type();
-        if self.expect(TokenKind::Eq, "`=` and an initial value").is_none() {
+        if self
+            .expect(TokenKind::Eq, "`=` and an initial value")
+            .is_none()
+        {
             self.skip_line();
             return None;
         }
@@ -522,7 +542,9 @@ impl Parser {
             }
         };
         let persist = self.parse_persist_suffix();
-        let span = keyword.span.merge(persist.as_ref().map_or(value.span(), |p| p.span));
+        let span = keyword
+            .span
+            .merge(persist.as_ref().map_or(value.span(), |p| p.span));
         self.finish_line(&format!("`let {}`", name_token.text));
         Some(Node::Let(Let {
             span,
@@ -544,7 +566,10 @@ impl Parser {
         };
         self.check_identifier(&name_token);
         let ty = self.parse_optional_type();
-        if self.expect(TokenKind::Eq, "`=` and the expression to derive").is_none() {
+        if self
+            .expect(TokenKind::Eq, "`=` and the expression to derive")
+            .is_none()
+        {
             self.skip_line();
             return None;
         }
@@ -557,7 +582,12 @@ impl Parser {
         };
         let span = keyword.span.merge(value.span());
         self.finish_line(&format!("`derive {}`", name_token.text));
-        Some(Node::Derive(Derive { span, name: name_token.text, ty, value }))
+        Some(Node::Derive(Derive {
+            span,
+            name: name_token.text,
+            ty,
+            value,
+        }))
     }
 
     /// `persist "counter"` or `persist session "counter"` after a `let` value.
@@ -578,7 +608,11 @@ impl Parser {
                 return None;
             }
         };
-        Some(Persist { span: keyword.span.merge(key.span()), key, session })
+        Some(Persist {
+            span: keyword.span.merge(key.span()),
+            key,
+            session,
+        })
     }
 
     fn parse_fn(&mut self) -> Option<Node> {
@@ -608,9 +642,18 @@ impl Parser {
             self.expect(TokenKind::RParen, "`)`");
         }
         self.finish_line(&format!("`fn {}`", name_token.text));
-        let body = self.parse_indented_block(BlockKind::Statements, &format!("fn {}", name_token.text), "E181");
+        let body = self.parse_indented_block(
+            BlockKind::Statements,
+            &format!("fn {}", name_token.text),
+            "E181",
+        );
         let span = keyword.span.merge(name_token.span);
-        Some(Node::Fn(FnDecl { span, name: name_token.text, params, body }))
+        Some(Node::Fn(FnDecl {
+            span,
+            name: name_token.text,
+            params,
+            body,
+        }))
     }
 
     fn parse_param(&mut self) -> Option<Param> {
@@ -620,15 +663,32 @@ impl Parser {
         };
         self.check_identifier(&name_token);
         let ty = self.parse_optional_type();
-        let default = if self.eat(TokenKind::Eq) { self.parse_expr() } else { None };
-        let span = default.as_ref().map_or(name_token.span, |d| name_token.span.merge(d.span()));
-        Some(Param { span, name: name_token.text, ty, default })
+        let default = if self.eat(TokenKind::Eq) {
+            self.parse_expr()
+        } else {
+            None
+        };
+        let span = default
+            .as_ref()
+            .map_or(name_token.span, |d| name_token.span.merge(d.span()));
+        Some(Param {
+            span,
+            name: name_token.text,
+            ty,
+            default,
+        })
     }
 
     fn parse_return(&mut self) -> Option<Node> {
         let keyword = self.advance();
-        let value = if self.at_line_end() { None } else { self.parse_expr() };
-        let span = value.as_ref().map_or(keyword.span, |v| keyword.span.merge(v.span()));
+        let value = if self.at_line_end() {
+            None
+        } else {
+            self.parse_expr()
+        };
+        let span = value
+            .as_ref()
+            .map_or(keyword.span, |v| keyword.span.merge(v.span()));
         self.finish_line("`return`");
         Some(Node::Return(Return { span, value }))
     }
@@ -643,7 +703,10 @@ impl Parser {
             }
         };
         self.finish_line(&format!("`slot {}`", name_token.text));
-        Some(Node::Slot(Slot { span: keyword.span.merge(name_token.span), name: Some(name_token.text) }))
+        Some(Node::Slot(Slot {
+            span: keyword.span.merge(name_token.span),
+            name: Some(name_token.text),
+        }))
     }
 
     /// True when an `if` on this line is the ternary-like expression form,
@@ -699,10 +762,14 @@ impl Parser {
             else_branch = Some(self.parse_indented_block(kind, "else", "E182"));
             break;
         }
-        let span = branches
-            .iter()
-            .fold(keyword.span, |acc, (condition, _)| acc.merge(condition.span()));
-        Some(Node::If(If { span, branches, else_branch }))
+        let span = branches.iter().fold(keyword.span, |acc, (condition, _)| {
+            acc.merge(condition.span())
+        });
+        Some(Node::If(If {
+            span,
+            branches,
+            else_branch,
+        }))
     }
 
     fn parse_each(&mut self, kind: BlockKind) -> Option<Node> {
@@ -734,7 +801,10 @@ impl Parser {
             let found = self.peek().clone();
             self.error(
                 "E184",
-                format!("expected `in` after the item name, found {}", found.describe()),
+                format!(
+                    "expected `in` after the item name, found {}",
+                    found.describe()
+                ),
                 found.span,
             )
             .suggest("each todo in todos");
@@ -764,7 +834,14 @@ impl Parser {
         }
         let body = self.parse_indented_block(kind, "each", "E180");
         let span = keyword.span.merge(item_token.span);
-        Some(Node::Each(Each { span, item: item_token.text, index, iter, key, body }))
+        Some(Node::Each(Each {
+            span,
+            item: item_token.text,
+            index,
+            iter,
+            key,
+            body,
+        }))
     }
 
     /// Consumes the newline and the indented block that must follow `opener`.
@@ -797,7 +874,11 @@ impl Parser {
             if let Some(value) = self.parse_expr() {
                 let span = target.span.merge(value.span());
                 self.finish_line("the assigned value");
-                return Some(Node::Assign(Assign { span, target, value }));
+                return Some(Node::Assign(Assign {
+                    span,
+                    target,
+                    value,
+                }));
             }
             self.skip_line();
             return None;
@@ -809,7 +890,10 @@ impl Parser {
                     let found = self.peek().clone();
                     self.error(
                         "E170",
-                        format!("expected a value or a statement, found {}", found.describe()),
+                        format!(
+                            "expected a value or a statement, found {}",
+                            found.describe()
+                        ),
                         found.span,
                     );
                     self.pos += 1;
@@ -882,7 +966,9 @@ impl Parser {
                     self.pos += 1;
                     match self.parse_expr() {
                         Some(index) => {
-                            let close = self.expect(TokenKind::RBracket, "`]`").map_or(index.span(), |t| t.span);
+                            let close = self
+                                .expect(TokenKind::RBracket, "`]`")
+                                .map_or(index.span(), |t| t.span);
                             steps.push(PathStep::Index(index, open.merge(close)));
                         }
                         None => break,
@@ -896,7 +982,11 @@ impl Parser {
                 PathStep::Field(_, span) | PathStep::Index(_, span) => *span,
             })
         });
-        Path { span, root: root_token.text, steps }
+        Path {
+            span,
+            root: root_token.text,
+            steps,
+        }
     }
 
     /// Reports identifiers that cannot work: reserved words, and names starting
@@ -931,7 +1021,11 @@ impl Parser {
         let def = match tables::element(&token.text) {
             Some(def) => def,
             None => {
-                self.error("E120", format!("`{}` is not a Plain element", token.text), token.span);
+                self.error(
+                    "E120",
+                    format!("`{}` is not a Plain element", token.text),
+                    token.span,
+                );
                 self.skip_line();
                 self.skip_block();
                 return None;
@@ -941,7 +1035,14 @@ impl Parser {
         let mut deco = Decorations::default();
         let mut args = Vec::new();
         let mut span = token.span;
-        self.parse_ui_items(&name, false, UiMode::Inline, &mut deco, &mut args, &mut span);
+        self.parse_ui_items(
+            &name,
+            false,
+            UiMode::Inline,
+            &mut deco,
+            &mut args,
+            &mut span,
+        );
 
         let mut children = std::mem::take(&mut deco.children);
         if self.kind() == TokenKind::Newline {
@@ -951,7 +1052,14 @@ impl Parser {
             self.pos += 1;
             let mut block = Decorations::default();
             let mut block_args = Vec::new();
-            self.parse_ui_items(&name, false, UiMode::Block, &mut block, &mut block_args, &mut span);
+            self.parse_ui_items(
+                &name,
+                false,
+                UiMode::Block,
+                &mut block,
+                &mut block_args,
+                &mut span,
+            );
             self.eat(TokenKind::Dedent);
             args.extend(block_args);
             children.append(&mut block.children);
@@ -1005,7 +1113,14 @@ impl Parser {
         } else {
             let mut deco = Decorations::default();
             let mut args = Vec::new();
-            self.parse_ui_items(&name, true, UiMode::Inline, &mut deco, &mut args, &mut used.span);
+            self.parse_ui_items(
+                &name,
+                true,
+                UiMode::Inline,
+                &mut deco,
+                &mut args,
+                &mut used.span,
+            );
             used.positional.extend(args);
             used.props.append(&mut deco.props_named);
             apply_use_decorations(&mut used, deco);
@@ -1018,7 +1133,14 @@ impl Parser {
             self.pos += 1;
             let mut deco = Decorations::default();
             let mut args = Vec::new();
-            self.parse_ui_items(&name, true, UiMode::Block, &mut deco, &mut args, &mut used.span);
+            self.parse_ui_items(
+                &name,
+                true,
+                UiMode::Block,
+                &mut deco,
+                &mut args,
+                &mut used.span,
+            );
             self.eat(TokenKind::Dedent);
             used.positional.extend(args);
             used.props.append(&mut deco.props_named);
@@ -1136,8 +1258,12 @@ impl Parser {
                                 Some(condition) => {
                                     *span = span.merge(condition.span());
                                     if deco.show.is_some() {
-                                        self.error("E140", "an element can only have one `show`", name_span)
-                                            .suggest("Combine the conditions: `show a and b`.");
+                                        self.error(
+                                            "E140",
+                                            "an element can only have one `show`",
+                                            name_span,
+                                        )
+                                        .suggest("Combine the conditions: `show a and b`.");
                                     }
                                     deco.show = Some(condition);
                                 }
@@ -1164,7 +1290,11 @@ impl Parser {
                         "slot" if component => {
                             if let Some((slot_name, nodes)) = self.parse_slot_fill() {
                                 *span = span.merge(name_span);
-                                if deco.slots.iter().any(|(existing, _)| *existing == slot_name) {
+                                if deco
+                                    .slots
+                                    .iter()
+                                    .any(|(existing, _)| *existing == slot_name)
+                                {
                                     self.error(
                                         "E159",
                                         format!("the slot `{slot_name}` is filled twice"),
@@ -1262,8 +1392,12 @@ impl Parser {
         if let Some(message) = tables::deferred(name) {
             self.skip_line();
             self.skip_block();
-            self.error("E900", format!("`{name}` is not implemented in Plain v0.1"), name_span)
-                .note(message.to_string());
+            self.error(
+                "E900",
+                format!("`{name}` is not implemented in Plain v0.1"),
+                name_span,
+            )
+            .note(message.to_string());
             return;
         }
 
@@ -1272,7 +1406,10 @@ impl Parser {
         // space"; `fill primary` means "paint it with the primary colour".
         if tables::MODIFIERS.contains(&name) && !self.value_follows() {
             self.pos += 1;
-            deco.modifiers.push(Modifier { span: name_span, name: name.to_string() });
+            deco.modifiers.push(Modifier {
+                span: name_span,
+                name: name.to_string(),
+            });
             return;
         }
         if !component && tables::is_attribute(host, name) && self.value_follows() {
@@ -1298,8 +1435,12 @@ impl Parser {
             return;
         }
         if tables::is_property(name) {
-            self.error("E146", format!("the property `{name}` needs a value"), name_span)
-                .suggest(format!("{name} ..."));
+            self.error(
+                "E146",
+                format!("the property `{name}` needs a value"),
+                name_span,
+            )
+            .suggest(format!("{name} ..."));
             self.pos += 1;
             return;
         }
@@ -1309,7 +1450,8 @@ impl Parser {
             match self.parse_expr() {
                 Some(value) => {
                     *span = span.merge(value.span());
-                    deco.props_named.push((name_token.span, name_token.text, value));
+                    deco.props_named
+                        .push((name_token.span, name_token.text, value));
                 }
                 None => self.skip_line(),
             }
@@ -1320,28 +1462,33 @@ impl Parser {
             let name_token = self.advance();
             let values = self.parse_values();
             if values.is_empty() {
-                self.error(
-                    "E185",
-                    format!("the prop `{name}` has no value"),
-                    name_span,
-                )
-                .suggest(format!("Give it a value, or pass it inline: `{host}({name}: ...)`."));
+                self.error("E185", format!("the prop `{name}` has no value"), name_span)
+                    .suggest(format!(
+                        "Give it a value, or pass it inline: `{host}({name}: ...)`."
+                    ));
                 return;
             }
             let value = join_values(values, name_span);
             *span = span.merge(value.span());
-            deco.props_named.push((name_token.span, name_token.text, value));
+            deco.props_named
+                .push((name_token.span, name_token.text, value));
             return;
         }
 
         // Nothing matched. Offer the closest thing Plain does know.
         self.pos += 1;
         if let Some(property) = tables::suggest_property(name) {
-            self.error("E130", format!("`{name}` is not a property Plain knows", name_span))
-                .suggest(format!("Did you mean `{property}`?"));
+            self.error(
+                "E130",
+                format!("`{name}` is not a property Plain knows", name_span),
+            )
+            .suggest(format!("Did you mean `{property}`?"));
         } else if let Some(element) = closest_name(name, tables::ELEMENT_NAMES) {
-            self.error("E120", format!("`{name}` is not a Plain element", name_span))
-                .suggest(format!("Did you mean `{element}`?"));
+            self.error(
+                "E120",
+                format!("`{name}` is not a Plain element", name_span),
+            )
+            .suggest(format!("Did you mean `{element}`?"));
         } else {
             self.error(
                 "E172",
@@ -1406,8 +1553,12 @@ impl Parser {
     ) {
         self.pos += 1;
         if component {
-            self.error("E142", "`bind` belongs on an input element, not a component", name_span)
-                .suggest("Bind the `input` inside the component, or pass the value in as a prop.");
+            self.error(
+                "E142",
+                "`bind` belongs on an input element, not a component",
+                name_span,
+            )
+            .suggest("Bind the `input` inside the component, or pass the value in as a prop.");
             self.skip_line();
             return;
         }
@@ -1417,26 +1568,29 @@ impl Parser {
             return;
         }
         if !tables::BINDABLE.contains(&host) {
-            self.error(
-                "E142",
-                format!("`{host}` cannot be bound"),
-                name_span,
-            )
-            .note("`bind` works on input, check, radio, slider, select, toggle and textarea.")
-            .suggest("Use `on input` and `value` instead.");
+            self.error("E142", format!("`{host}` cannot be bound"), name_span)
+                .note("`bind` works on input, check, radio, slider, select, toggle and textarea.")
+                .suggest("Use `on input` and `value` instead.");
             self.skip_line();
             return;
         }
         if self.kind() != TokenKind::Name {
             let found = self.peek().clone();
-            self.error("E141", format!("`bind` needs a name, found {}", found.describe()), found.span)
-                .suggest("bind form.email");
+            self.error(
+                "E141",
+                format!("`bind` needs a name, found {}", found.describe()),
+                found.span,
+            )
+            .suggest("bind form.email");
             self.skip_line();
             return;
         }
         let path = self.parse_path();
         *span = span.merge(path.span);
-        deco.bind = Some(BindTarget { span: path.span, path });
+        deco.bind = Some(BindTarget {
+            span: path.span,
+            path,
+        });
     }
 
     /// `slot header` followed by an indented block.
@@ -1460,7 +1614,10 @@ impl Parser {
         } else {
             self.error(
                 "E158",
-                format!("`slot {}` needs an indented block underneath it", name_token.text),
+                format!(
+                    "`slot {}` needs an indented block underneath it",
+                    name_token.text
+                ),
                 keyword.span.merge(name_token.span),
             );
             Vec::new()
@@ -1481,7 +1638,9 @@ impl Parser {
             )
             .suggest(format!("{} ...", token.text));
         }
-        let span = values.iter().fold(token.span, |acc, value| acc.merge(value.span()));
+        let span = values
+            .iter()
+            .fold(token.span, |acc, value| acc.merge(value.span()));
         Some(StyleProp::new(span, token.text, values))
     }
 
@@ -1496,7 +1655,9 @@ impl Parser {
             )
             .suggest(format!("{} \"value\"", token.text));
         }
-        let span = values.iter().fold(token.span, |acc, value| acc.merge(value.span()));
+        let span = values
+            .iter()
+            .fold(token.span, |acc, value| acc.merge(value.span()));
         AttrProp::new(span, token.text, values)
     }
 
@@ -1581,9 +1742,19 @@ impl Parser {
         }
         let span = keyword.span.merge(name_token.span);
         let mut scope = StyleScope::default();
-        let allow = Allowed { pseudo: false, responsive: true, modifiers: false, show: false };
+        let allow = Allowed {
+            pseudo: false,
+            responsive: true,
+            modifiers: false,
+            show: false,
+        };
         self.parse_style_scope(&mut scope, allow, mode);
-        Some(PseudoBlock { span, name, props: scope.props, responsive: scope.responsive })
+        Some(PseudoBlock {
+            span,
+            name,
+            props: scope.props,
+            responsive: scope.responsive,
+        })
     }
 
     /// `@tablet` followed by properties on the same line or in a block below.
@@ -1597,7 +1768,11 @@ impl Parser {
             }
             TokenKind::Length | TokenKind::Int => {
                 let token = self.advance();
-                (token.text.clone(), format!("(min-width: {})", token.text), token.span)
+                (
+                    token.text.clone(),
+                    format!("(min-width: {})", token.text),
+                    token.span,
+                )
             }
             _ => {
                 let found = self.peek().clone();
@@ -1617,7 +1792,12 @@ impl Parser {
         // breakpoint, and only the semantic pass has seen the whole file.
         let span = at.span.merge(name_span);
         let mut scope = StyleScope::default();
-        let allow = Allowed { pseudo: true, responsive: false, modifiers: true, show: true };
+        let allow = Allowed {
+            pseudo: true,
+            responsive: false,
+            modifiers: true,
+            show: true,
+        };
         self.parse_style_scope(&mut scope, allow, mode);
         Some(ResponsiveBlock {
             span,
@@ -1692,8 +1872,12 @@ impl Parser {
             TokenKind::At => {
                 if !allow.responsive {
                     let span = self.span();
-                    self.error("E176", "a breakpoint block cannot contain another breakpoint block", span)
-                        .suggest("Put both conditions on the outer block, or use two sibling blocks.");
+                    self.error(
+                        "E176",
+                        "a breakpoint block cannot contain another breakpoint block",
+                        span,
+                    )
+                    .suggest("Put both conditions on the outer block, or use two sibling blocks.");
                     self.skip_line();
                     self.skip_block();
                     return true;
@@ -1730,15 +1914,25 @@ impl Parser {
                     return true;
                 }
                 if name == "on" {
-                    self.error("E175", "an event handler belongs on the element, not in a style block", name_span)
-                        .suggest("Move `on` up to the element's own indentation.");
+                    self.error(
+                        "E175",
+                        "an event handler belongs on the element, not in a style block",
+                        name_span,
+                    )
+                    .suggest("Move `on` up to the element's own indentation.");
                     self.skip_line();
                     self.skip_block();
                     return true;
                 }
-                if tables::MODIFIERS.contains(&name.as_str()) && !self.value_follows() && allow.modifiers {
+                if tables::MODIFIERS.contains(&name.as_str())
+                    && !self.value_follows()
+                    && allow.modifiers
+                {
                     self.pos += 1;
-                    scope.modifiers.push(Modifier { span: name_span, name });
+                    scope.modifiers.push(Modifier {
+                        span: name_span,
+                        name,
+                    });
                     return true;
                 }
                 if tables::is_property(&name) {
@@ -1749,11 +1943,18 @@ impl Parser {
                     return true;
                 }
                 if tables::pseudo(&name).is_some() {
-                    self.error("E144", format!("`{name}` is a pseudo-state, which needs `when`"), name_span)
-                        .suggest(format!("when {name}"));
+                    self.error(
+                        "E144",
+                        format!("`{name}` is a pseudo-state, which needs `when`"),
+                        name_span,
+                    )
+                    .suggest(format!("when {name}"));
                 } else if let Some(property) = tables::suggest_property(&name) {
-                    self.error("E130", format!("`{name}` is not a property Plain knows", name_span))
-                        .suggest(format!("Did you mean `{property}`?"));
+                    self.error(
+                        "E130",
+                        format!("`{name}` is not a property Plain knows", name_span),
+                    )
+                    .suggest(format!("Did you mean `{property}`?"));
                 } else {
                     self.error("E130", format!("`{name}` is not a property Plain knows", name_span))
                         .note("A style block holds properties such as `color`, `padding`, `font-size`, `gap`.");
@@ -1764,7 +1965,11 @@ impl Parser {
             }
             _ => {
                 let found = self.peek().clone();
-                self.error("E173", format!("expected a style property, found {}", found.describe()), found.span);
+                self.error(
+                    "E173",
+                    format!("expected a style property, found {}", found.describe()),
+                    found.span,
+                );
                 false
             }
         }
@@ -1859,7 +2064,11 @@ impl Parser {
                 self.pos += 1;
                 self.parse_expr().map(|value| {
                     let span = target.span.merge(value.span());
-                    Node::Assign(Assign { span, target, value })
+                    Node::Assign(Assign {
+                        span,
+                        target,
+                        value,
+                    })
                 })
             } else {
                 self.parse_expr().map(Node::Expr)
@@ -1875,7 +2084,10 @@ impl Parser {
                         let found = self.peek().clone();
                         self.error(
                             "E171",
-                            format!("`=>` needs a statement after it, found {}", found.describe()),
+                            format!(
+                                "`=>` needs a statement after it, found {}",
+                                found.describe()
+                            ),
                             found.span,
                         )
                         .suggest("on click => count.set(count() + 1)");
@@ -1889,7 +2101,14 @@ impl Parser {
             self.parse_indented_block(BlockKind::Statements, &format!("on {event}"), "E174")
         };
 
-        Some(Handler { span, event, keys, key_mods, modifiers, body })
+        Some(Handler {
+            span,
+            event,
+            keys,
+            key_mods,
+            modifiers,
+            body,
+        })
     }
 
     // -- components --------------------------------------------------------
@@ -1996,7 +2215,13 @@ impl Parser {
             .suggest(format!("component {name}\n  text \"...\""));
         }
 
-        Some(Component { span, name, props, body, doc: None })
+        Some(Component {
+            span,
+            name,
+            props,
+            body,
+            doc: None,
+        })
     }
 
     /// True when the current line is `name: type`, `name = default` or both.
@@ -2023,8 +2248,15 @@ impl Parser {
         } else {
             None
         };
-        let span = default.as_ref().map_or(name_token.span, |value| name_token.span.merge(value.span()));
-        Some(PropDecl { span, name: name_token.text, ty, default })
+        let span = default
+            .as_ref()
+            .map_or(name_token.span, |value| name_token.span.merge(value.span()));
+        Some(PropDecl {
+            span,
+            name: name_token.text,
+            ty,
+            default,
+        })
     }
 
     // -- theme -------------------------------------------------------------
@@ -2037,9 +2269,13 @@ impl Parser {
         self.skip_newlines();
         if self.kind() != TokenKind::Indent {
             let found = self.peek().clone();
-            self.error("E116", "`theme` needs an indented block of categories", found.span)
-                .note("Categories are colors, fonts, sizes, spacing, radius, shadows and breakpoints.")
-                .suggest("theme\n  colors\n    primary #5dade2");
+            self.error(
+                "E116",
+                "`theme` needs an indented block of categories",
+                found.span,
+            )
+            .note("Categories are colors, fonts, sizes, spacing, radius, shadows and breakpoints.")
+            .suggest("theme\n  colors\n    primary #5dade2");
             self.skip_block();
             return Some(Theme { span, groups });
         }
@@ -2086,9 +2322,13 @@ impl Parser {
                 format!("`{name}` is not a theme category"),
                 name_token.span,
             )
-            .note("Plain v0.1 knows colors, fonts, sizes, spacing, radius, shadows and breakpoints.")
+            .note(
+                "Plain v0.1 knows colors, fonts, sizes, spacing, radius, shadows and breakpoints.",
+            )
             .suggest(
-                closest_name(&name, tables::THEME_CATEGORIES).unwrap_or("colors").to_string(),
+                closest_name(&name, tables::THEME_CATEGORIES)
+                    .unwrap_or("colors")
+                    .to_string(),
             );
             self.skip_line();
             self.skip_block();
@@ -2107,7 +2347,10 @@ impl Parser {
             let found = self.peek().clone();
             self.error(
                 "E118",
-                format!("the category `{}` needs tokens indented underneath it", group.name),
+                format!(
+                    "the category `{}` needs tokens indented underneath it",
+                    group.name
+                ),
                 found.span,
             )
             .suggest(format!("{}\n  md 1rem", group.name));
@@ -2121,8 +2364,12 @@ impl Parser {
             }
             if self.kind() == TokenKind::Indent {
                 let found = self.span();
-                self.error("E102", "unexpected indentation inside a theme category", found)
-                    .note("Only `dark` opens a nested block inside a category.");
+                self.error(
+                    "E102",
+                    "unexpected indentation inside a theme category",
+                    found,
+                )
+                .note("Only `dark` opens a nested block inside a category.");
                 self.pos += 1;
                 self.skip_block();
                 continue;
@@ -2173,8 +2420,12 @@ impl Parser {
                         }
                         None => {
                             let span = entry.span;
-                            self.error("E122", "a custom breakpoint needs a width such as `1800px`", span)
-                                .suggest("huge 1800px");
+                            self.error(
+                                "E122",
+                                "a custom breakpoint needs a width such as `1800px`",
+                                span,
+                            )
+                            .suggest("huge 1800px");
                             String::new()
                         }
                     };
@@ -2202,7 +2453,10 @@ impl Parser {
             let found = self.peek().clone();
             self.error(
                 "E123",
-                format!("expected a token name inside `{category}`, found {}", found.describe()),
+                format!(
+                    "expected a token name inside `{category}`, found {}",
+                    found.describe()
+                ),
                 found.span,
             );
             self.skip_line();
@@ -2219,8 +2473,14 @@ impl Parser {
             .suggest(format!("{} ...", name_token.text));
         }
         self.finish_line(&format!("the token `{}`", name_token.text));
-        let span = values.iter().fold(name_token.span, |acc, value| acc.merge(value.span()));
-        Some(ThemeEntry { span, name: name_token.text, values })
+        let span = values
+            .iter()
+            .fold(name_token.span, |acc, value| acc.merge(value.span()));
+        Some(ThemeEntry {
+            span,
+            name: name_token.text,
+            values,
+        })
     }
 
     // -- types -------------------------------------------------------------
@@ -2255,7 +2515,9 @@ impl Parser {
                 }
                 self.pos += 1;
             }
-            let span = options.iter().fold(pipe.span, |acc, option| acc.merge(option.span()));
+            let span = options
+                .iter()
+                .fold(pipe.span, |acc, option| acc.merge(option.span()));
             ty = TypeRef::Union(options, span);
         }
         Some(ty)
@@ -2288,7 +2550,9 @@ impl Parser {
                             break;
                         }
                     }
-                    let close = self.expect(TokenKind::RParen, "`)`").map_or(token.span, |t| t.span);
+                    let close = self
+                        .expect(TokenKind::RParen, "`)`")
+                        .map_or(token.span, |t| t.span);
                     let span = token.span.merge(close);
                     if name == "record" {
                         return Some(TypeRef::Record(args, span));
@@ -2302,7 +2566,9 @@ impl Parser {
                 if name == "list" && self.kind() == TokenKind::LBracket {
                     self.pos += 1;
                     let inner = self.parse_type();
-                    let close = self.expect(TokenKind::RBracket, "`]`").map_or(token.span, |t| t.span);
+                    let close = self
+                        .expect(TokenKind::RBracket, "`]`")
+                        .map_or(token.span, |t| t.span);
                     let span = token.span.merge(close);
                     return Some(match inner {
                         Some(inner) => TypeRef::List(Box::new(inner), span),
@@ -2314,7 +2580,9 @@ impl Parser {
             TokenKind::LBracket => {
                 let open = self.advance();
                 let inner = self.parse_type();
-                let close = self.expect(TokenKind::RBracket, "`]`").map_or(open.span, |t| t.span);
+                let close = self
+                    .expect(TokenKind::RBracket, "`]`")
+                    .map_or(open.span, |t| t.span);
                 let span = open.span.merge(close);
                 Some(match inner {
                     Some(inner) => TypeRef::List(Box::new(inner), span),
@@ -2366,7 +2634,10 @@ impl Parser {
                     return None;
                 }
             };
-            let span = arrow.map_or_else(|| start.merge(body.span()), |a| start.merge(a.span).merge(body.span()));
+            let span = arrow.map_or_else(
+                || start.merge(body.span()),
+                |a| start.merge(a.span).merge(body.span()),
+            );
             return Some(Expr::Lambda(params, Box::new(body), span));
         }
         self.parse_conditional()
@@ -2431,9 +2702,13 @@ impl Parser {
         self.pos += 1;
         let then = self.parse_conditional()?;
         if !self.is_name("else") {
-            self.error("E126", "an expression `if` needs an `else`", keyword.span.merge(then.span()))
-                .note("Because it produces a value, both branches are required.")
-                .suggest("if a then b else c");
+            self.error(
+                "E126",
+                "an expression `if` needs an `else`",
+                keyword.span.merge(then.span()),
+            )
+            .note("Because it produces a value, both branches are required.")
+            .suggest("if a then b else c");
             return Some(Expr::Conditional(
                 Box::new(condition),
                 Box::new(then),
@@ -2444,7 +2719,12 @@ impl Parser {
         self.pos += 1;
         let otherwise = self.parse_conditional()?;
         let span = keyword.span.merge(otherwise.span());
-        Some(Expr::Conditional(Box::new(condition), Box::new(then), Box::new(otherwise), span))
+        Some(Expr::Conditional(
+            Box::new(condition),
+            Box::new(then),
+            Box::new(otherwise),
+            span,
+        ))
     }
 
     /// `value | filter(f) | count()` — the pipeline reads left to right.
@@ -2602,7 +2882,9 @@ impl Parser {
                     if self.kind() == TokenKind::LParen {
                         self.pos += 1;
                         let args = self.parse_arguments();
-                        let close = self.expect(TokenKind::RParen, "`)`").map_or(field.span, |t| t.span);
+                        let close = self
+                            .expect(TokenKind::RParen, "`)`")
+                            .map_or(field.span, |t| t.span);
                         let span = base.span().merge(close);
                         base = Expr::Method(Box::new(base), field.text, args, span);
                     } else {
@@ -2614,7 +2896,9 @@ impl Parser {
                     let open = self.advance();
                     match self.parse_expr() {
                         Some(index) => {
-                            let close = self.expect(TokenKind::RBracket, "`]`").map_or(index.span(), |t| t.span);
+                            let close = self
+                                .expect(TokenKind::RBracket, "`]`")
+                                .map_or(index.span(), |t| t.span);
                             let span = base.span().merge(open.span).merge(close);
                             base = Expr::Index(Box::new(base), Box::new(index), span);
                         }
@@ -2624,7 +2908,9 @@ impl Parser {
                 TokenKind::LParen => {
                     self.pos += 1;
                     let args = self.parse_arguments();
-                    let close = self.expect(TokenKind::RParen, "`)`").map_or(base.span(), |t| t.span);
+                    let close = self
+                        .expect(TokenKind::RParen, "`)`")
+                        .map_or(base.span(), |t| t.span);
                     let span = base.span().merge(close);
                     base = Expr::Call(Box::new(base), args, span);
                 }
@@ -2740,9 +3026,16 @@ impl Parser {
                 self.pos += 1;
                 None
             }
-            TokenKind::InterpStart | TokenKind::InterpEnd | TokenKind::StrText | TokenKind::StrEnd => {
-                self.error("E172", "interpolation only appears inside a string literal", token.span)
-                    .suggest("Write `\"~(value)\"` inside a string.");
+            TokenKind::InterpStart
+            | TokenKind::InterpEnd
+            | TokenKind::StrText
+            | TokenKind::StrEnd => {
+                self.error(
+                    "E172",
+                    "interpolation only appears inside a string literal",
+                    token.span,
+                )
+                .suggest("Write `\"~(value)\"` inside a string.");
                 self.pos += 1;
                 None
             }
@@ -2779,7 +3072,9 @@ impl Parser {
                 }
             }
         }
-        let close = self.expect(TokenKind::RBracket, "`]`").map_or(open, |token| token.span);
+        let close = self
+            .expect(TokenKind::RBracket, "`]`")
+            .map_or(open, |token| token.span);
         Some(Expr::List(items, open.merge(close)))
     }
 
@@ -2807,7 +3102,10 @@ impl Parser {
                     let found = self.peek().clone();
                     self.error(
                         "E131",
-                        format!("a record field is `name: value`, found {}", found.describe()),
+                        format!(
+                            "a record field is `name: value`, found {}",
+                            found.describe()
+                        ),
                         found.span,
                     )
                     .suggest("record(name: \"Alice\", age: 30)");
@@ -2824,7 +3122,9 @@ impl Parser {
                 }
             }
         }
-        let close = self.expect(TokenKind::RParen, "`)`").map_or(open, |token| token.span);
+        let close = self
+            .expect(TokenKind::RParen, "`)`")
+            .map_or(open, |token| token.span);
         Some(Expr::Record(fields, open.merge(close)))
     }
 
@@ -2874,7 +3174,10 @@ impl Parser {
                     let found = self.peek().clone();
                     self.error(
                         "E132",
-                        format!("the string literal is never closed; found {}", found.describe()),
+                        format!(
+                            "the string literal is never closed; found {}",
+                            found.describe()
+                        ),
                         span,
                     )
                     .suggest("Add the missing `\"`.");
@@ -2957,14 +3260,18 @@ fn join_values(mut values: Vec<Expr>, span: Span) -> Expr {
     if values.len() == 1 {
         return values.remove(0);
     }
-    let span = values.iter().fold(span, |acc, value| acc.merge(value.span()));
+    let span = values
+        .iter()
+        .fold(span, |acc, value| acc.merge(value.span()));
     Expr::List(values, span)
 }
 
 /// True when `name` starts with a capital letter, which is how Plain
 /// distinguishes a component from a built-in element.
 fn is_component_name(name: &str) -> bool {
-    name.chars().next().is_some_and(|first| first.is_ascii_uppercase())
+    name.chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_uppercase())
 }
 
 /// Keywords that introduce a statement or a UI construct.
@@ -3028,7 +3335,10 @@ mod tests {
     /// of quietly producing a smaller tree.
     fn ok(src: &str) -> Program {
         let (program, diagnostics) = parse(src);
-        assert!(diagnostics.is_empty(), "unexpected diagnostics for:\n{src}\n{diagnostics:#?}");
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics for:\n{src}\n{diagnostics:#?}"
+        );
         program
     }
 
@@ -3100,7 +3410,11 @@ mod tests {
     }
 
     fn values(prop: &StyleProp) -> String {
-        prop.values.iter().map(text_of).collect::<Vec<_>>().join(" ")
+        prop.values
+            .iter()
+            .map(text_of)
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     // -- structure ---------------------------------------------------------
@@ -3217,7 +3531,10 @@ mod tests {
         assert_eq!(element.attrs.len(), 2);
         assert_eq!(element.attrs[0].name, "type");
         assert_eq!(element.attrs[1].name, "placeholder");
-        assert!(element.props.is_empty(), "`type` is an attribute, not a property");
+        assert!(
+            element.props.is_empty(),
+            "`type` is an attribute, not a property"
+        );
     }
 
     #[test]
@@ -3242,7 +3559,11 @@ mod tests {
     fn an_unknown_element_is_reported_with_a_suggestion() {
         let (_, diagnostics) = parse("buton \"Save\"\n");
         assert!(codes(&diagnostics).contains(&"E120"));
-        assert!(diagnostics[0].suggestion.as_deref().unwrap().contains("button"));
+        assert!(diagnostics[0]
+            .suggestion
+            .as_deref()
+            .unwrap()
+            .contains("button"));
     }
 
     #[test]
@@ -3282,12 +3603,17 @@ mod tests {
         assert_eq!(element.responsive.len(), 1);
         assert_eq!(element.responsive[0].name, "tablet");
         assert_eq!(element.responsive[0].query, "(min-width: 640px)");
-        assert_eq!(element.children.len(), 1, "the indented line is still a child");
+        assert_eq!(
+            element.children.len(),
+            1,
+            "the indented line is still a child"
+        );
     }
 
     #[test]
     fn a_breakpoint_block_below_its_element_owns_its_indentation() {
-        let program = ok("stack\n  @desktop\n    columns 4\n    when hover\n      background red\n");
+        let program =
+            ok("stack\n  @desktop\n    columns 4\n    when hover\n      background red\n");
         let element = first_element(&program);
         assert_eq!(element.responsive.len(), 1);
         assert_eq!(element.responsive[0].props.len(), 1);
@@ -3305,14 +3631,21 @@ mod tests {
     fn an_unknown_pseudo_state_is_reported() {
         let (_, diagnostics) = parse("button \"x\"\n  when hovered\n    background red\n");
         assert!(codes(&diagnostics).contains(&"E157"));
-        assert!(diagnostics[0].suggestion.as_deref().unwrap().contains("when hover"));
+        assert!(diagnostics[0]
+            .suggestion
+            .as_deref()
+            .unwrap()
+            .contains("when hover"));
     }
 
     #[test]
     fn media_features_resolve_to_a_query() {
         let program = ok("box\n  @reduced-motion\n    transition none\n");
         let element = first_element(&program);
-        assert_eq!(element.responsive[0].query, "(prefers-reduced-motion: reduce)");
+        assert_eq!(
+            element.responsive[0].query,
+            "(prefers-reduced-motion: reduce)"
+        );
     }
 
     #[test]
@@ -3328,7 +3661,8 @@ mod tests {
 
     #[test]
     fn handlers_accept_an_arrow_body_and_a_block_body() {
-        let program = ok("button \"x\"\n  on click => count.set(count() + 1)\n  on keydown.enter => go()\n");
+        let program =
+            ok("button \"x\"\n  on click => count.set(count() + 1)\n  on keydown.enter => go()\n");
         let element = first_element(&program);
         assert_eq!(element.handlers.len(), 2);
         assert_eq!(element.handlers[0].event, "click");
@@ -3344,14 +3678,21 @@ mod tests {
     fn handler_behaviour_modifiers_parse() {
         let program = ok("form\n  on submit.prevent.stop => go()\n");
         let element = first_element(&program);
-        assert_eq!(element.handlers[0].modifiers, vec!["prevent".to_string(), "stop".to_string()]);
+        assert_eq!(
+            element.handlers[0].modifiers,
+            vec!["prevent".to_string(), "stop".to_string()]
+        );
     }
 
     #[test]
     fn a_key_filter_on_a_mouse_event_is_reported() {
         let (_, diagnostics) = parse("button \"x\"\n  on click.right => menu()\n");
         assert!(codes(&diagnostics).contains(&"E151"));
-        assert!(diagnostics[0].suggestion.as_deref().unwrap().contains("contextmenu"));
+        assert!(diagnostics[0]
+            .suggestion
+            .as_deref()
+            .unwrap()
+            .contains("contextmenu"));
     }
 
     #[test]
@@ -3386,7 +3727,8 @@ mod tests {
 
     #[test]
     fn let_derive_and_persist_parse() {
-        let program = ok("let count = 0\nlet name = \"a\" persist \"user\"\nderive double = count * 2\n");
+        let program =
+            ok("let count = 0\nlet name = \"a\" persist \"user\"\nderive double = count * 2\n");
         match &program.body[0] {
             Node::Let(decl) => {
                 assert_eq!(decl.name, "count");
@@ -3442,7 +3784,9 @@ mod tests {
 
     #[test]
     fn if_chains_parse() {
-        let program = ok("if a > 1\n  text \"big\"\nelse if a > 0\n  text \"small\"\nelse\n  text \"none\"\n");
+        let program = ok(
+            "if a > 1\n  text \"big\"\nelse if a > 0\n  text \"small\"\nelse\n  text \"none\"\n",
+        );
         match &program.body[0] {
             Node::If(branch) => {
                 assert_eq!(branch.branches.len(), 2);
@@ -3516,7 +3860,9 @@ mod tests {
         let component = &program.components[0];
         assert_eq!(component.props.len(), 2);
         assert!(matches!(&component.body[0], Node::Slot(slot) if slot.name.is_none()));
-        assert!(matches!(&component.body[1], Node::Slot(slot) if slot.name.as_deref() == Some("footer")));
+        assert!(
+            matches!(&component.body[1], Node::Slot(slot) if slot.name.as_deref() == Some("footer"))
+        );
         assert!(matches!(&component.body[2], Node::Element(_)));
     }
 
@@ -3548,7 +3894,9 @@ mod tests {
 
     #[test]
     fn a_component_use_can_be_styled_and_filled() {
-        let program = ok("Card(title: \"Hi\")\n  gap 1rem\n  text \"body\"\n  slot header\n    heading \"H\"\n");
+        let program = ok(
+            "Card(title: \"Hi\")\n  gap 1rem\n  text \"body\"\n  slot header\n    heading \"H\"\n",
+        );
         match &program.body[0] {
             Node::Use(used) => {
                 assert_eq!(used.props_style.len(), 1);
@@ -3652,7 +4000,10 @@ mod tests {
     #[test]
     fn pipes_chain_left_to_right() {
         let program = ok("let a = items | filter(it => it.done) | count()\n");
-        assert_eq!(let_value(&program, 0), "items | filter(it => it.done) | count()");
+        assert_eq!(
+            let_value(&program, 0),
+            "items | filter(it => it.done) | count()"
+        );
     }
 
     #[test]
@@ -3757,7 +4108,10 @@ mod tests {
     fn deferred_keywords_report_the_roadmap_not_a_syntax_error() {
         for keyword in ["route", "fetch", "validate", "match", "import", "global"] {
             let (program, diagnostics) = parse(&format!("{keyword} \"/x\"\n"));
-            assert!(codes(&diagnostics).contains(&"E900"), "{keyword} should be deferred");
+            assert!(
+                codes(&diagnostics).contains(&"E900"),
+                "{keyword} should be deferred"
+            );
             assert_eq!(program.deferred.len(), 1);
             assert_eq!(program.deferred[0].keyword, keyword);
         }
@@ -3835,8 +4189,7 @@ mod tests {
 
     #[test]
     fn a_full_small_app_parses_without_errors() {
-        let program = ok(
-            "theme
+        let program = ok("theme
   colors
     primary #5dade2
     dark
@@ -3880,8 +4233,7 @@ main
       button \"Go\"
         type submit
         on submit.prevent => search()
-",
-        );
+");
         assert_eq!(program.components.len(), 1);
         assert!(program.theme.is_some());
         assert_eq!(program.body.len(), 4);
