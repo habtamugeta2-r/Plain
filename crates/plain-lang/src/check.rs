@@ -1362,9 +1362,7 @@ mod tests {
 
     #[test]
     fn an_undeclared_breakpoint_is_reported() {
-        assert!(
-            codes("box color red\n  @huge\n    color blue\n").contains(&"E215".to_string())
-        );
+        assert!(codes("box color red\n  @huge\n    color blue\n").contains(&"E215".to_string()));
         clean("theme\n  breakpoints\n    huge 1800px\nbox color red\n  @huge\n    color blue\n");
         clean("box color red\n  @tablet\n    color blue\n");
     }
