@@ -223,7 +223,12 @@ impl Builder {
             if is_static_condition(condition) {
                 declarations.push((
                     "display".to_string(),
-                    if is_false(condition) { "none" } else { "revert" }.to_string(),
+                    if is_false(condition) {
+                        "none"
+                    } else {
+                        "revert"
+                    }
+                    .to_string(),
                 ));
             } else {
                 self.styles.diagnostics.push(
@@ -451,7 +456,10 @@ fn declarations_for(prop: &StyleProp, theme: &ThemeVars) -> Vec<(String, String)
     }
 
     let name = css_name(&prop.name);
-    if matches!(name.as_str(), "grid-template-columns" | "grid-template-rows") {
+    if matches!(
+        name.as_str(),
+        "grid-template-columns" | "grid-template-rows"
+    ) {
         if let Some(tracks) = single_number(&prop.values) {
             // Equal tracks that may shrink below their content, which is what
             // `1fr` on its own does not allow.
@@ -532,7 +540,9 @@ fn token(plain: &str, css: &str, name: &str, theme: &ThemeVars) -> String {
     if category.is_empty() {
         return name.to_string();
     }
-    theme.variable(category, name).unwrap_or_else(|| name.to_string())
+    theme
+        .variable(category, name)
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// The text of a string value. Plain's quotes are not CSS's, so they are dropped.
@@ -593,9 +603,7 @@ fn value_part(value: &Expr, scope: &Scope) -> String {
         // Only the semantic pass knows whether a bare word is a CSS keyword or a
         // variable, and it says so by putting the name in scope.
         Expr::Name(name, _) => scope.contains(name),
-        Expr::Str(parts, _) => parts
-            .iter()
-            .any(|part| matches!(part, StrPart::Expr(_))),
+        Expr::Str(parts, _) => parts.iter().any(|part| matches!(part, StrPart::Expr(_))),
         other => expr::is_dynamic(other, scope),
     };
     if computed {
@@ -907,7 +915,10 @@ mod tests {
     fn dark_overrides_come_out_both_ways() {
         let source = "theme\n  colors\n    primary #5dade2\n    dark\n      primary #2e86c1\n";
         let text = css(source);
-        assert!(text.contains("@media (prefers-color-scheme: dark)"), "{text}");
+        assert!(
+            text.contains("@media (prefers-color-scheme: dark)"),
+            "{text}"
+        );
         assert!(text.contains(":root:not(.light)"), "{text}");
         assert!(text.contains(".dark {"), "{text}");
         assert!(text.contains("--color-primary: #2e86c1;"), "{text}");
@@ -942,7 +953,11 @@ mod tests {
         let text = css(
             "box color red\n  @tablet\n    color blue\nbox color green\n  @tablet\n    color teal\n",
         );
-        assert_eq!(text.matches("@media (min-width: 640px)").count(), 1, "{text}");
+        assert_eq!(
+            text.matches("@media (min-width: 640px)").count(),
+            1,
+            "{text}"
+        );
     }
 
     #[test]
@@ -994,7 +1009,10 @@ mod tests {
             "color".to_string(),
             vec![Expr::Name("brand".to_string(), Span::point(0))],
         );
-        assert!(!is_dynamic(&prop), "a bare word is CSS until told otherwise");
+        assert!(
+            !is_dynamic(&prop),
+            "a bare word is CSS until told otherwise"
+        );
         prop.dynamic = true;
         assert!(is_dynamic(&prop));
 
@@ -1048,7 +1066,8 @@ mod tests {
 
     #[test]
     fn minifying_removes_whitespace_but_not_strings() {
-        let pretty = css("box font \"Inter, system-ui\" padding 1rem\n  when hover\n    color red\n");
+        let pretty =
+            css("box font \"Inter, system-ui\" padding 1rem\n  when hover\n    color red\n");
         let minified = minify_css(&pretty);
         assert!(!minified.contains('\n'), "{minified}");
         assert!(!minified.contains("/*"), "{minified}");
@@ -1057,7 +1076,10 @@ mod tests {
         assert!(minified.contains(".p1:hover{color:red;}"), "{minified}");
         // A comma is punctuation, so the space after it goes; the value is still
         // the same font stack.
-        assert!(minified.contains("font-family:Inter,system-ui;"), "{minified}");
+        assert!(
+            minified.contains("font-family:Inter,system-ui;"),
+            "{minified}"
+        );
     }
 
     #[test]
