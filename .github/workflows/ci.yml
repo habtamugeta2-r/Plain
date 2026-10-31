@@ -73,16 +73,24 @@ jobs:
             echo "commit \`${{ github.sha }}\`, run ${{ github.run_id }}"
             echo
             for f in fmt.log build.log test.log clippy.log; do
-              if [ -s "$f" ]; then
-                echo "<details><summary><code>$f</code> (tail)</summary>"
+              [ -s "$f" ] || continue
+              # Every diagnostic header, its location and the offending source
+              # line, deduplicated. A plain tail hides the first errors when
+              # there are many, and the first error is usually the real one.
+              {
+                echo "<details><summary><code>$f</code></summary>"
                 echo
                 echo '```'
-                tail -n 150 "$f"
+                sed 's/\x1b\[[0-9;]*m//g' "$f" |
+                  grep -E '^(error|warning)(\[|:)|^[[:space:]]*--> |^[[:space:]]*= (note|help):|^[0-9]+[[:space:]]*\||^test .* FAILED|^failures:|^---- ' |
+                  sed 's#^[[:space:]]*--> ##; s#/home/runner/work/Plain/Plain/##; s#/Users/runner/work/Plain/Plain/##; s#D:\\\\a\\\\Plain\\\\Plain\\\\##' |
+                  awk '!seen[$0]++' |
+                  head -n 500
                 echo '```'
                 echo
                 echo "</details>"
                 echo
-              fi
+              }
             done
           } > body.md
           gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \

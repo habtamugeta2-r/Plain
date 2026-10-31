@@ -2002,7 +2002,11 @@ impl Parser {
         }
 
         if !tables::EVENTS.contains(&event.as_str()) {
-            self.error("E150", format!("`{event}` is not an event Plain knows", event_token.span))
+            self.error(
+                "E150",
+                format!("`{event}` is not an event Plain knows"),
+                event_token.span,
+            )
                 .note("Plain uses DOM event names: click, dblclick, input, change, submit, keydown, keyup, focus, blur, mouseenter, mouseleave, scroll, toggle.")
                 .suggest(match event.as_str() {
                     "click" | "tap" => "on click",
@@ -2050,7 +2054,11 @@ impl Parser {
                 }
                 keys.push(suffix);
             } else {
-                self.error("E154", format!("`.{suffix}` is not a modifier Plain knows", suffix_span))
+                self.error(
+                    "E154",
+                    format!("`.{suffix}` is not a modifier Plain knows"),
+                    suffix_span,
+                )
                     .note("Behaviour modifiers are prevent, stop, self, once, passive and capture. Key filters are enter, escape, tab, space, up, down, left, right, home, end, page-up, page-down, delete, backspace, insert.")
                     .suggest("on click.prevent");
             }
@@ -2702,18 +2710,15 @@ impl Parser {
         self.pos += 1;
         let then = self.parse_conditional()?;
         if !self.is_name("else") {
-            self.error(
-                "E126",
-                "an expression `if` needs an `else`",
-                keyword.span.merge(then.span()),
-            )
-            .note("Because it produces a value, both branches are required.")
-            .suggest("if a then b else c");
+            let span = keyword.span.merge(then.span());
+            self.error("E126", "an expression `if` needs an `else`", span)
+                .note("Because it produces a value, both branches are required.")
+                .suggest("if a then b else c");
             return Some(Expr::Conditional(
                 Box::new(condition),
                 Box::new(then),
-                Box::new(Expr::None(self.span())),
-                keyword.span.merge(then.span()),
+                Box::new(Expr::None(span)),
+                span,
             ));
         }
         self.pos += 1;
@@ -3503,12 +3508,14 @@ mod tests {
 
     #[test]
     fn fill_alone_is_a_modifier_and_fill_with_a_colour_is_a_property() {
-        let modifier = first_element(&ok("box fill\n"));
+        let program = ok("box fill\n");
+        let modifier = first_element(&program);
         assert_eq!(modifier.modifiers.len(), 1);
         assert_eq!(modifier.modifiers[0].name, "fill");
         assert!(modifier.props.is_empty());
 
-        let property = first_element(&ok("box fill primary\n"));
+        let program = ok("box fill primary\n");
+        let property = first_element(&program);
         assert!(property.modifiers.is_empty());
         assert_eq!(prop_names(&property), vec!["fill"]);
     }
@@ -3974,11 +3981,11 @@ mod tests {
         assert_eq!(let_value(&program, 0), "1 + 2 * 3");
         assert_eq!(let_value(&program, 1), "1 + 2 * 3");
         assert!(matches!(
-            match &program.body[0] { Node::Let(d) => &*d.value, _ => unreachable!() },
+            match &program.body[0] { Node::Let(d) => &d.value, _ => unreachable!() },
             Expr::Binary(op, _, _, _) if op == "+"
         ));
         assert!(matches!(
-            match &program.body[1] { Node::Let(d) => &*d.value, _ => unreachable!() },
+            match &program.body[1] { Node::Let(d) => &d.value, _ => unreachable!() },
             Expr::Binary(op, _, _, _) if op == "*"
         ));
     }

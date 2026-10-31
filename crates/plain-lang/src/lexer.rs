@@ -526,13 +526,20 @@ impl Lexer {
         let mut closed = false;
 
         // Emits the literal text accumulated so far.
-        macro_rules! flush {
+        macro_rules! emit {
             () => {
                 if !buf.is_empty() {
                     let text = std::mem::take(&mut buf);
                     let span = self.span(chunk_start, self.pos);
                     self.push(Token::simple(TokenKind::StrText, span, text));
                 }
+            };
+        }
+        // Emits and then starts a new run of text here. The two are separate so
+        // that the final emit does not assign to `chunk_start` for nobody.
+        macro_rules! flush {
+            () => {
+                emit!();
                 chunk_start = self.pos;
             };
         }
@@ -540,7 +547,7 @@ impl Lexer {
         while self.pos < end {
             let ch = self.chars[self.pos];
             if ch == '"' {
-                flush!();
+                emit!();
                 self.pos += 1;
                 closed = true;
                 break;
@@ -597,12 +604,10 @@ impl Lexer {
                             )
                             .suggest("Put an expression inside: `~(count + 1)`.");
                         }
-                        let saved = self.pos;
                         self.pos = expr_start;
                         self.tokenize_range(expr_end, false);
                         self.pos = expr_end + 1;
                         self.push_simple(TokenKind::InterpEnd, self.span(expr_end, self.pos));
-                        let _ = saved;
                     }
                     None => {
                         self.error(
@@ -640,7 +645,7 @@ impl Lexer {
             )
             .note("Strings run to the end of the line; multi-line strings are planned for v0.2.")
             .suggest("Add a `\"` at the end of the line.");
-            flush!();
+            emit!();
         }
         self.push_simple(
             TokenKind::StrEnd,
