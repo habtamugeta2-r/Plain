@@ -333,7 +333,6 @@ impl Checker {
 
     /// The nearest declared name or built-in, close enough to be worth offering.
     fn closest(&self, name: &str) -> Option<String> {
-        let letters: Vec<char> = name.chars().collect();
         let mut candidates: Vec<String> =
             self.scope.names().iter().map(|n| n.to_string()).collect();
         candidates.extend(tables::BUILTINS.iter().map(|(plain, _)| plain.to_string()));

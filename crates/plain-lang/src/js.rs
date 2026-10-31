@@ -181,9 +181,15 @@ impl Emitter {
     fn declare(&self, nodes: &[Node], scope: &mut Scope) {
         for node in nodes {
             match node {
-                Node::Let(declaration) => scope.bind(&declaration.name, Binding::Accessor),
-                Node::Derive(declaration) => scope.bind(&declaration.name, Binding::Accessor),
-                Node::Fn(function) => scope.bind(&function.name, Binding::Function),
+                Node::Let(declaration) => {
+                    scope.bind(&declaration.name, Binding::Accessor);
+                }
+                Node::Derive(declaration) => {
+                    scope.bind(&declaration.name, Binding::Accessor);
+                }
+                Node::Fn(function) => {
+                    scope.bind(&function.name, Binding::Function);
+                }
                 _ => {}
             }
         }
