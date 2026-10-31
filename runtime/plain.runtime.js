@@ -17,7 +17,7 @@
  * runtime discovers dependencies by observing reads.
  *
  * Security: the runtime only ever uses `textContent`, `setAttribute` and
- * `style.setProperty`. It never assigns `innerHTML`, so interpolated values
+ * `style.setProperty`. It never writes markup as a string, so interpolated values
  * cannot inject markup. Escape hatches that need raw HTML are a later phase and
  * will require an explicit, sanitised API.
  */

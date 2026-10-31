@@ -1380,9 +1380,15 @@ impl Parser {
             return;
         }
 
-        let is_element = tables::element(name).is_some();
-        let is_use = is_component_name(name);
-        let is_control = is_statement_keyword(name);
+        // `label` is both an element and the accessible name of a form control,
+        // and it is the only name in both tables. Inside a control, with a value
+        // after it, it is always the attribute: a nested element could not have
+        // been written inline anyway.
+        let attribute_wins = !component && tables::is_attribute(host, name) && self.value_follows();
+
+        let is_element = !attribute_wins && tables::element(name).is_some();
+        let is_use = !attribute_wins && is_component_name(name);
+        let is_control = !attribute_wins && is_statement_keyword(name);
 
         if (is_element || is_use || is_control) && mode == UiMode::Inline {
             self.error(
@@ -3375,9 +3381,32 @@ mod tests {
         let (program, diagnostics) = parse(src);
         assert!(
             diagnostics.is_empty(),
-            "unexpected diagnostics for:\n{src}\n{diagnostics:#?}"
+            "unexpected diagnostics for:\n{src}\n{}",
+            summarise(&diagnostics)
         );
         program
+    }
+
+    /// One line per diagnostic. `{:#?}` on a `Diagnostic` runs to forty lines and
+    /// buries the failure it was supposed to explain.
+    fn summarise(diagnostics: &[Diagnostic]) -> String {
+        diagnostics
+            .iter()
+            .map(|d| {
+                let mut line = format!("{:?} {}: {}", d.severity, d.code, d.title);
+                if let Some(label) = d.labels.first() {
+                    line.push_str(&format!("  @{}", label.span.start));
+                }
+                for note in &d.notes {
+                    line.push_str(&format!("\n    note: {note}"));
+                }
+                if let Some(help) = &d.suggestion {
+                    line.push_str(&format!("\n    help: {help}"));
+                }
+                line
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     fn codes(diagnostics: &[Diagnostic]) -> Vec<&str> {

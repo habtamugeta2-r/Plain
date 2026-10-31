@@ -544,7 +544,6 @@ pub const PROPERTY_ALIASES: &[(&str, &str)] = &[
 /// Single-word property names Plain accepts. Kebab-case names fall through to
 /// CSS unchanged, which keeps the whole of CSS reachable.
 pub const SINGLE_WORD_PROPERTIES: &[&str] = &[
-    "type",
     "color",
     "background",
     "width",
@@ -936,6 +935,7 @@ pub const RESTRICTED_ATTRIBUTES: &[(&str, &[&str])] = &[
     ("scope", &["table-cell"]),
     ("datetime", &["time"]),
     ("level", &["heading"]),
+    ("type", &["input", "button", "link", "list", "item"]),
 ];
 
 /// True when `property` is an HTML attribute on `element`.
@@ -1224,8 +1224,15 @@ mod tests {
     }
 
     #[test]
-    fn type_and_transition_are_properties_not_keywords() {
-        assert!(is_property("type"));
+    fn type_is_an_attribute_and_transition_is_a_property() {
+        // `type` was first drafted as a style property. There is no CSS property
+        // by that name, and `input type email` is how a field gets its keyboard
+        // and its validation, so it is an attribute — on the elements that have
+        // one, and nowhere else.
+        assert!(is_attribute("input", "type"));
+        assert!(is_attribute("button", "type"));
+        assert!(!is_attribute("box", "type"));
+        assert!(!is_property("type"));
         assert!(is_property("transition"));
         assert!(!RESERVED.contains(&"type"));
         assert!(!RESERVED.contains(&"transition"));
