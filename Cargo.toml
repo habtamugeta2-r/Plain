@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/plain-core",
+  "crates/plain-lang",
+  "crates/plainc",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+license = "Apache-2.0"
+repository = "https://github.com/habtamugeta2-r/Plain"
+authors = ["Plain contributors"]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

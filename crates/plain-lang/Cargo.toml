@@ -1,0 +1,11 @@
+[package]
+name = "plain-lang"
+description = "Lexer, parser, semantic analysis and code generation for the Plain language"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+plain-core = { path = "../plain-core" }

@@ -1,0 +1,20 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Plain build output
+/dist
+/out
+*.plain.css
+*.plain.js
+
+# Node (editor tooling only)
+node_modules/
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

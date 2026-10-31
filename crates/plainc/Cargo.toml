@@ -1,0 +1,16 @@
+[package]
+name = "plainc"
+description = "The Plain compiler command line interface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "plain"
+path = "src/main.rs"
+
+[dependencies]
+plain-core = { path = "../plain-core" }
+plain-lang = { path = "../plain-lang" }
