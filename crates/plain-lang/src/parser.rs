@@ -1478,17 +1478,11 @@ impl Parser {
         // Nothing matched. Offer the closest thing Plain does know.
         self.pos += 1;
         if let Some(property) = tables::suggest_property(name) {
-            self.error(
-                "E130",
-                format!("`{name}` is not a property Plain knows", name_span),
-            )
-            .suggest(format!("Did you mean `{property}`?"));
+            self.error("E130", format!("`{name}` is not a property Plain knows"), name_span)
+                .suggest(format!("Did you mean `{property}`?"));
         } else if let Some(element) = closest_name(name, tables::ELEMENT_NAMES) {
-            self.error(
-                "E120",
-                format!("`{name}` is not a Plain element", name_span),
-            )
-            .suggest(format!("Did you mean `{element}`?"));
+            self.error("E120", format!("`{name}` is not a Plain element"), name_span)
+                .suggest(format!("Did you mean `{element}`?"));
         } else {
             self.error(
                 "E172",
@@ -1627,7 +1621,7 @@ impl Parser {
 
     // -- styling -----------------------------------------------------------
 
-    fn parse_style_prop(&mut self) -> Option<StyleProp> {
+    fn parse_style_prop(&mut self) -> StyleProp {
         let token = self.advance();
         let values = self.parse_values();
         if values.is_empty() {
@@ -1641,7 +1635,7 @@ impl Parser {
         let span = values
             .iter()
             .fold(token.span, |acc, value| acc.merge(value.span()));
-        Some(StyleProp::new(span, token.text, values))
+        StyleProp::new(span, token.text, values)
     }
 
     fn parse_attr_prop(&mut self) -> AttrProp {
@@ -1728,7 +1722,7 @@ impl Parser {
         let name = name_token.text.clone();
         if tables::pseudo(&name).is_none() {
             let span = name_token.span;
-            self.error("E157", format!("`{name}` is not a pseudo-state Plain knows", span))
+            self.error("E157", format!("`{name}` is not a pseudo-state Plain knows"), span)
                 .note("Plain spells them out: hover, focus, active, disabled, checked, first, last, odd, even, before, after, selection, placeholder.")
                 .suggest(match name.as_str() {
                     "hovered" | "mouse-over" => "when hover",
@@ -1936,10 +1930,7 @@ impl Parser {
                     return true;
                 }
                 if tables::is_property(&name) {
-                    match self.parse_style_prop() {
-                        Some(prop) => scope.props.push(prop),
-                        None => return true,
-                    }
+                    scope.props.push(self.parse_style_prop());
                     return true;
                 }
                 if tables::pseudo(&name).is_some() {
@@ -1952,12 +1943,17 @@ impl Parser {
                 } else if let Some(property) = tables::suggest_property(&name) {
                     self.error(
                         "E130",
-                        format!("`{name}` is not a property Plain knows", name_span),
+                        format!("`{name}` is not a property Plain knows"),
+                        name_span,
                     )
                     .suggest(format!("Did you mean `{property}`?"));
                 } else {
-                    self.error("E130", format!("`{name}` is not a property Plain knows", name_span))
-                        .note("A style block holds properties such as `color`, `padding`, `font-size`, `gap`.");
+                    self.error(
+                        "E130",
+                        format!("`{name}` is not a property Plain knows"),
+                        name_span,
+                    )
+                    .note("A style block holds properties such as `color`, `padding`, `font-size`, `gap`.");
                 }
                 self.skip_line();
                 self.skip_block();
