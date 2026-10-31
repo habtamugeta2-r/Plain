@@ -906,6 +906,7 @@ mod tests {
                 TokenKind::StrStart,
                 TokenKind::StrText,
                 TokenKind::StrEnd,
+                TokenKind::Dedent,
             ]
         );
     }
@@ -938,7 +939,7 @@ mod tests {
 
     #[test]
     fn numbers_units_and_colours() {
-        let (tokens, errors) = lex_source("12px 1.5rem 100% 42 3.14 #ff5733 #fff");
+        let (tokens, errors) = lex_source("12px 1.5rem 100% 42 2.75 #ff5733 #fff");
         assert!(errors.is_empty(), "{errors:?}");
         let lengths: Vec<(f64, String)> = tokens
             .iter()
@@ -958,7 +959,7 @@ mod tests {
             .any(|t| t.kind == TokenKind::Int && t.value == 42.0));
         assert!(tokens
             .iter()
-            .any(|t| t.kind == TokenKind::Float && t.value == 3.14));
+            .any(|t| t.kind == TokenKind::Float && t.value == 2.75));
         assert_eq!(
             tokens.iter().filter(|t| t.kind == TokenKind::Color).count(),
             2
@@ -1068,8 +1069,9 @@ mod tests {
         let count = |wanted: TokenKind| kinds.iter().filter(|kind| **kind == wanted).count();
         // The inner string is lexed inline, so it gets its own StrStart/StrEnd
         // rather than being re-lexed from a copied substring.
-        assert_eq!(count(TokenKind::StrStart), 2);
-        assert_eq!(count(TokenKind::StrEnd), 2);
+        // Three strings: the outer literal plus the two inside the interpolation.
+        assert_eq!(count(TokenKind::StrStart), 3);
+        assert_eq!(count(TokenKind::StrEnd), 3);
         assert_eq!(count(TokenKind::InterpStart), 1);
         assert_eq!(count(TokenKind::InterpEnd), 1);
         assert!(tokens.iter().any(|token| token.text == "item"));

@@ -451,6 +451,12 @@ impl Parser {
             return Some(self.deferred_node("type", span));
         }
 
+        // An assignment wins over every other reading of the first word, so
+        // `form.email = "a"` is a statement and not an element called `form`.
+        if self.assignment_ahead() {
+            return self.parse_expression_statement();
+        }
+
         match name.as_str() {
             "let" => self.parse_let(),
             "derive" => self.parse_derive(),
@@ -508,6 +514,17 @@ impl Parser {
                     self.skip_line();
                     self.skip_block();
                     return None;
+                }
+                // A word followed by content and one edit away from an element
+                // name is a typo for that element: `buton "Save"`.
+                if looks_like_content(self.at(1).kind) {
+                    if let Some(element) = closest_name(&name, tables::ELEMENT_NAMES, 1) {
+                        self.error("E120", format!("`{name}` is not a Plain element"), span)
+                            .suggest(format!("Did you mean `{element}`?"));
+                        self.skip_line();
+                        self.skip_block();
+                        return None;
+                    }
                 }
                 self.parse_expression_statement()
             }
@@ -657,10 +674,7 @@ impl Parser {
     }
 
     fn parse_param(&mut self) -> Option<Param> {
-        let name_token = match self.expect(TokenKind::Name, "a parameter name") {
-            Some(token) => token,
-            None => return None,
-        };
+        let name_token = self.expect(TokenKind::Name, "a parameter name")?;
         self.check_identifier(&name_token);
         let ty = self.parse_optional_type();
         let default = if self.eat(TokenKind::Eq) {
@@ -1322,7 +1336,7 @@ impl Parser {
                         }
                         _ => {
                             self.parse_plain_item(
-                                host, component, mode, deco, args, span, &name, name_span,
+                                host, component, mode, deco, span, &name, name_span,
                             );
                         }
                     }
@@ -1352,7 +1366,6 @@ impl Parser {
         component: bool,
         mode: UiMode,
         deco: &mut Decorations,
-        args: &mut Vec<Expr>,
         span: &mut Span,
         name: &str,
         name_span: Span,
@@ -1389,16 +1402,20 @@ impl Parser {
             }
             return;
         }
-        if let Some(message) = tables::deferred(name) {
-            self.skip_line();
-            self.skip_block();
-            self.error(
-                "E900",
-                format!("`{name}` is not implemented in Plain v0.1"),
-                name_span,
-            )
-            .note(message.to_string());
-            return;
+        // `type email` on an input is an attribute, not the deferred type
+        // alias; the alias is only recognised at the top of a body.
+        if !tables::is_attribute(host, name) {
+            if let Some(message) = tables::deferred(name) {
+                self.skip_line();
+                self.skip_block();
+                self.error(
+                    "E900",
+                    format!("`{name}` is not implemented in Plain v0.1"),
+                    name_span,
+                )
+                .note(message.to_string());
+                return;
+            }
         }
 
         // Modifiers never take a value, so they are recognised first — but only
@@ -1484,7 +1501,7 @@ impl Parser {
                 name_span,
             )
             .suggest(format!("Did you mean `{property}`?"));
-        } else if let Some(element) = closest_name(name, tables::ELEMENT_NAMES) {
+        } else if let Some(element) = closest_name(name, tables::ELEMENT_NAMES, 2) {
             self.error(
                 "E120",
                 format!("`{name}` is not a Plain element"),
@@ -2243,10 +2260,7 @@ impl Parser {
     }
 
     fn parse_prop_decl(&mut self) -> Option<PropDecl> {
-        let name_token = match self.expect(TokenKind::Name, "a prop name") {
-            Some(token) => token,
-            None => return None,
-        };
+        let name_token = self.expect(TokenKind::Name, "a prop name")?;
         self.check_identifier(&name_token);
         let ty = self.parse_optional_type();
         let default = if self.eat(TokenKind::Eq) {
@@ -2338,7 +2352,7 @@ impl Parser {
                 "Plain v0.1 knows colors, fonts, sizes, spacing, radius, shadows and breakpoints.",
             )
             .suggest(
-                closest_name(&name, tables::THEME_CATEGORIES)
+                closest_name(&name, tables::THEME_CATEGORIES, 2)
                     .unwrap_or("colors")
                     .to_string(),
             );
@@ -2517,11 +2531,8 @@ impl Parser {
         while self.kind() == TokenKind::Pipe {
             let pipe = self.advance();
             let mut options = vec![ty];
-            loop {
-                match self.parse_type_atom() {
-                    Some(next) => options.push(next),
-                    None => break,
-                }
+            while let Some(next) = self.parse_type_atom() {
+                options.push(next);
                 if self.kind() != TokenKind::Pipe {
                     break;
                 }
@@ -3306,7 +3317,11 @@ fn capitalise(name: &str) -> String {
 /// The nearest name in a vocabulary, for "did you mean" suggestions. A
 /// distance above two is not worth suggesting: a confident wrong guess is worse
 /// than no guess at all.
-fn closest_name(target: &str, candidates: &'static [&'static str]) -> Option<&'static str> {
+fn closest_name(
+    target: &str,
+    candidates: &'static [&'static str],
+    max_distance: usize,
+) -> Option<&'static str> {
     let target: Vec<char> = target.chars().collect();
     let mut best: Option<(&'static str, usize)> = None;
     for candidate in candidates {
@@ -3316,11 +3331,25 @@ fn closest_name(target: &str, candidates: &'static [&'static str]) -> Option<&'s
             Some((_, best_distance)) => distance < best_distance,
             None => true,
         };
-        if distance <= 2 && better {
+        if distance <= max_distance && better {
             best = Some((*candidate, distance));
         }
     }
     best.map(|(candidate, _)| candidate)
+}
+
+/// True when a token can only be the content of an element. That is what makes
+/// `buton "Save"` a misspelt element rather than an expression statement.
+fn looks_like_content(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::StrStart
+            | TokenKind::Int
+            | TokenKind::Float
+            | TokenKind::Length
+            | TokenKind::Color
+            | TokenKind::LBracket
+    )
 }
 
 /// Renders a number without a trailing `.0`, for media queries.
@@ -3521,7 +3550,7 @@ mod tests {
         let program = ok("box fill primary\n");
         let property = first_element(&program);
         assert!(property.modifiers.is_empty());
-        assert_eq!(prop_names(&property), vec!["fill"]);
+        assert_eq!(prop_names(property), vec!["fill"]);
     }
 
     #[test]

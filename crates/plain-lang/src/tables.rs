@@ -883,21 +883,66 @@ pub const ATTRIBUTES: &[&str] = &[
     "inputmode",
 ];
 
+/// Attributes that only mean something on some elements.
+///
+/// Everything in [`ATTRIBUTES`] that is not listed here is global: `id`,
+/// `class`, `role`, `title`, `lang`, `tabindex` and friends are valid anywhere.
+/// Restricting the rest is what lets the parser tell `label "Name"` on a
+/// `check` (an accessible name) apart from the same two words on a `box` (a
+/// mistake), and it is what makes `placeholder` on a `box` an error instead of
+/// dead markup that a browser quietly ignores.
+pub const RESTRICTED_ATTRIBUTES: &[(&str, &[&str])] = &[
+    ("for", &["label"]),
+    ("action", &["form"]),
+    ("method", &["form"]),
+    ("autocomplete", &["form", "input", "textarea"]),
+    ("placeholder", &["input", "textarea"]),
+    ("pattern", &["input"]),
+    ("maxlength", &["input", "textarea"]),
+    ("minlength", &["input", "textarea"]),
+    ("inputmode", &["input", "textarea"]),
+    ("enterkeyhint", &["input", "textarea"]),
+    ("min", &["input", "slider", "progress"]),
+    ("max", &["input", "slider", "progress"]),
+    ("step", &["input", "slider"]),
+    ("multiple", &["select"]),
+    ("value", &["option", "input", "check", "radio", "slider", "progress"]),
+    ("rows", &["textarea"]),
+    ("cols", &["textarea"]),
+    ("label", &["check", "radio", "toggle", "slider", "select", "option", "input", "textarea"]),
+    ("alt", &["image"]),
+    ("srcset", &["image"]),
+    ("sizes", &["image"]),
+    ("loading", &["image"]),
+    ("decoding", &["image"]),
+    ("src", &["image", "video", "audio"]),
+    ("poster", &["video"]),
+    ("preload", &["video", "audio"]),
+    ("href", &["link"]),
+    ("to", &["link"]),
+    ("download", &["link"]),
+    ("target", &["link", "form"]),
+    ("rel", &["link"]),
+    ("colspan", &["table-cell"]),
+    ("rowspan", &["table-cell"]),
+    ("scope", &["table-cell"]),
+    ("datetime", &["time"]),
+    ("level", &["heading"]),
+];
+
 /// True when `property` is an HTML attribute on `element`.
 ///
-/// A few names mean different things on different elements. That is resolved
-/// from the element, which the compiler always knows statically, so it is never
-/// ambiguous at runtime: `rows` is `grid-template-rows` on a `grid` and the
-/// `rows` attribute on a `textarea`.
+/// A few names mean different things on different elements, and the compiler
+/// always knows the element statically, so this is never ambiguous at runtime:
+/// `rows` is `grid-template-rows` on a `grid` and the `rows` attribute on a
+/// `textarea`; `label` is an accessible name on a `check` and nothing at all on
+/// a `box`.
 pub fn is_attribute(element: &str, property: &str) -> bool {
-    if property == "rows" || property == "cols" {
-        return matches!(element, "textarea");
-    }
-    if property == "value" {
-        return matches!(
-            element,
-            "option" | "input" | "check" | "radio" | "slider" | "progress"
-        );
+    if let Some((_, allowed)) = RESTRICTED_ATTRIBUTES
+        .iter()
+        .find(|(name, _)| *name == property)
+    {
+        return allowed.contains(&element);
     }
     ATTRIBUTES.contains(&property)
 }

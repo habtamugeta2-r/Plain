@@ -98,12 +98,13 @@ jobs:
                 }
                 END { if (keep) for (i = 0; i < n; i++) print buf[i] }
               ' |
+              grep -vE '^(stack backtrace:|[[:space:]]*[0-9]+: |[[:space:]]*at /|[[:space:]]*at [.]/src|note: (Some details are omitted|run with))' |
               sed -e 's#^[[:space:]]*--> ##' \
                   -e 's#/home/runner/work/Plain/Plain/##g' \
                   -e 's#/Users/runner/work/Plain/Plain/##g' \
                   -e 's#D:.a.Plain.Plain.##g' |
               grep -vE '^[[:space:]]*$' |
-              head -n 260
+              head -n 400
             true
           }
 
