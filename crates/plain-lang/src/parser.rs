@@ -1478,11 +1478,19 @@ impl Parser {
         // Nothing matched. Offer the closest thing Plain does know.
         self.pos += 1;
         if let Some(property) = tables::suggest_property(name) {
-            self.error("E130", format!("`{name}` is not a property Plain knows"), name_span)
-                .suggest(format!("Did you mean `{property}`?"));
+            self.error(
+                "E130",
+                format!("`{name}` is not a property Plain knows"),
+                name_span,
+            )
+            .suggest(format!("Did you mean `{property}`?"));
         } else if let Some(element) = closest_name(name, tables::ELEMENT_NAMES) {
-            self.error("E120", format!("`{name}` is not a Plain element"), name_span)
-                .suggest(format!("Did you mean `{element}`?"));
+            self.error(
+                "E120",
+                format!("`{name}` is not a Plain element"),
+                name_span,
+            )
+            .suggest(format!("Did you mean `{element}`?"));
         } else {
             self.error(
                 "E172",
