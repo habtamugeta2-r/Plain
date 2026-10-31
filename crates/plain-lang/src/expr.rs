@@ -148,7 +148,7 @@ const JS_RESERVED: &[&str] = &[
 
 /// Runtime namespaces a bare name can reach into: `str.upper(x)`,
 /// `list.sort(xs)`, `device.width`, `store.get("theme")`.
-const NAMESPACES: &[&str] = &[
+pub(crate) const NAMESPACES: &[&str] = &[
     "str",
     "list",
     "num",

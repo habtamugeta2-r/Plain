@@ -14,7 +14,8 @@ Options:
       --title <text>     Document title
       --lang <tag>       Value of <html lang> (default: en)
       --mount <selector> Element the app mounts into (default: #app)
-      --minify           Minify CSS and JS
+      --prefix <text>    Prefix for generated class names (default: p)
+      --minify           Minify the stylesheet
   -h, --help             Print this message
 
 v0.1 compiles a single-file, client-rendered app. Routing, data fetching,

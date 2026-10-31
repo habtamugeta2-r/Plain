@@ -200,6 +200,10 @@ pub struct Param {
 #[derive(Debug, Clone)]
 pub struct If {
     pub span: Span,
+    /// True when this `if` renders elements, false when it runs statements. The
+    /// same keyword serves both, and the two compile to different JavaScript:
+    /// one builds and tears down nodes, the other is a plain branch.
+    pub ui: bool,
     /// The first pair is the `if`, the rest are `else if`s.
     pub branches: Vec<(Expr, Vec<Node>)>,
     pub else_branch: Option<Vec<Node>>,
@@ -209,6 +213,8 @@ pub struct If {
 #[derive(Debug, Clone)]
 pub struct Each {
     pub span: Span,
+    /// As [`If::ui`]: a loop over elements, or a loop over statements.
+    pub ui: bool,
     pub item: String,
     pub index: Option<String>,
     pub iter: Expr,

@@ -112,7 +112,8 @@ table {
   flex: 1 1 auto;
 }
 
-.pl-root {
+.pl-root,
+.pl-fragment {
   display: contents;
 }
 
@@ -184,6 +185,7 @@ mod tests {
             ".pl-grid",
             ".pl-layer",
             ".pl-root",
+            ".pl-fragment",
             ".pl-skip",
         ] {
             assert!(BASE_CSS.contains(class), "base CSS is missing {class}");

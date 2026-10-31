@@ -619,10 +619,12 @@ export const session = makeStore('session');
  * A signal restored from storage and written back on every change. `initial`
  * is used when nothing is stored yet.
  */
-export function persisted(key, initial) {
-  const value = store.get(key, initial);
+export function persisted(key, initial, area) {
+  // `session` keeps the value for the tab; anything else outlives it.
+  const backend = area === 'session' ? session : store;
+  const value = backend.get(key, initial);
   const state = signal(value);
-  effect(() => store.set(key, state()));
+  effect(() => backend.set(key, state()));
   if (typeof window !== 'undefined' && window.addEventListener) {
     const onStorage = (event) => {
       if (event.key !== STORAGE_PREFIX + key || event.newValue === null) return;

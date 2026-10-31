@@ -510,3 +510,16 @@ test('assign writes a path and copies every level it touches', () => {
   assert.match(errors[0].message, /not reactive state/);
   P.onError(null);
 });
+
+test('persisted can keep a value for the tab only', () => {
+  const local = P.persisted('area-test', 'a');
+  const tab = P.persisted('area-test', 'b', 'session');
+  local.set('in local');
+  tab.set('in session');
+  flush();
+  assert.equal(localStorage.getItem('plain:area-test'), '"in local"');
+  assert.equal(sessionStorage.getItem('plain:area-test'), '"in session"');
+  // A fresh signal restores from the area it asked for.
+  assert.equal(P.persisted('area-test', 'x')(), 'in local');
+  assert.equal(P.persisted('area-test', 'x', 'session')(), 'in session');
+});

@@ -815,6 +815,7 @@ impl Parser {
             acc.merge(condition.span())
         });
         Some(Node::If(If {
+            ui: kind == BlockKind::Nodes,
             span,
             branches,
             else_branch,
@@ -884,6 +885,7 @@ impl Parser {
         let body = self.parse_indented_block(kind, "each", "E180");
         let span = keyword.span.merge(item_token.span);
         Some(Node::Each(Each {
+            ui: kind == BlockKind::Nodes,
             span,
             item: item_token.text,
             index,
