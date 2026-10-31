@@ -262,6 +262,21 @@ pub const PSEUDOS: &[(&str, &str)] = &[
     ("marker", "::marker"),
 ];
 
+/// Resolves a breakpoint or media-feature name to its media query condition.
+///
+/// Returns `None` for a name Plain does not know. A `theme` block may declare
+/// custom breakpoints, so the semantic pass — not the parser — decides whether
+/// an unresolved name is an error.
+pub fn media_query(name: &str) -> Option<&'static str> {
+    if let Some((_, query)) = BREAKPOINTS.iter().find(|(key, _)| *key == name) {
+        return Some(query);
+    }
+    MEDIA_FEATURES
+        .iter()
+        .find(|(key, _)| *key == name)
+        .map(|(_, query)| *query)
+}
+
 /// Looks a pseudo-state up.
 pub fn pseudo(name: &str) -> Option<&'static str> {
     PSEUDOS
@@ -314,7 +329,6 @@ pub const EVENTS: &[&str] = &[
     "mouseup",
     "mousemove",
     "wheel",
-    "scroll",
     "drag",
     "dragstart",
     "dragend",
@@ -498,6 +512,9 @@ pub fn token_category(property: &str) -> &'static str {
 /// Plain-friendly aliases for CSS properties. Anything not listed here is
 /// passed through verbatim when it is kebab-case, so no CSS is unreachable.
 pub const PROPERTY_ALIASES: &[(&str, &str)] = &[
+    // `fill` on its own is the "take the remaining space" modifier; `fill` with
+    // a value is a colour. SVG fill is spelled `svg-fill` to keep the two apart.
+    ("fill", "background"),
     ("radius", "border-radius"),
     ("shadow", "box-shadow"),
     ("background", "background"),
@@ -513,18 +530,14 @@ pub const PROPERTY_ALIASES: &[(&str, &str)] = &[
     ("aspect", "aspect-ratio"),
     ("decoration", "text-decoration"),
     ("transform-text", "text-transform"),
-    ("pointer", "pointer-events"),
     ("select-text", "user-select"),
     ("backdrop", "backdrop-filter"),
     ("blend", "mix-blend-mode"),
     ("clip", "clip-path"),
-    ("scroll", "overflow"),
     ("svg-fill", "fill"),
     ("svg-stroke", "stroke"),
     ("columns", "grid-template-columns"),
     ("rows", "grid-template-rows"),
-    ("span", "grid-column"),
-    ("area", "grid-area"),
     ("size", "width"),
 ];
 
@@ -563,21 +576,16 @@ pub const SINGLE_WORD_PROPERTIES: &[&str] = &[
     "grow",
     "shrink",
     "basis",
-    "wrap",
     "order",
     "columns",
     "rows",
-    "span",
-    "area",
     "z",
     "aspect",
     "decoration",
-    "pointer",
     "select-text",
     "backdrop",
     "blend",
     "clip",
-    "scroll",
     "visibility",
     "isolation",
     "resize",
@@ -591,12 +599,159 @@ pub const SINGLE_WORD_PROPERTIES: &[&str] = &[
     "will-change",
 ];
 
+/// The CSS property allowlist. Plain's own vocabulary is the alias table above;
+/// everything else in CSS is reachable by writing its real name, and this list
+/// is what lets the compiler tell a property from a value.
+///
+/// It is a whitespace-separated blob rather than a slice literal so it stays
+/// readable and easy to extend.
+pub const CSS_PROPERTIES: &str = r#"
+accent-color align-content align-items align-self alignment-baseline all animation
+animation-composition animation-delay animation-direction animation-duration
+animation-fill-mode animation-iteration-count animation-name animation-play-state
+animation-timing-function appearance aspect-ratio backdrop-filter backface-visibility
+background background-attachment background-blend-mode background-clip background-color
+background-image background-origin background-position background-position-x
+background-position-y background-repeat background-size baseline-shift block-size
+border border-block border-block-color border-block-end border-block-end-color
+border-block-end-style border-block-end-width border-block-start
+border-block-start-color border-block-start-style border-block-start-width
+border-block-style border-block-width border-bottom border-bottom-color
+border-bottom-left-radius border-bottom-right-radius border-bottom-style
+border-bottom-width border-collapse border-color border-end-end-radius
+border-end-start-radius border-image border-image-outset border-image-repeat
+border-image-slice border-image-source border-image-width border-inline
+border-inline-color border-inline-end border-inline-end-color
+border-inline-end-style border-inline-end-width border-inline-start
+border-inline-start-color border-inline-start-style border-inline-start-width
+border-inline-style border-inline-width border-left border-left-color
+border-left-style border-left-width border-radius border-right border-right-color
+border-right-style border-right-width border-spacing border-start-end-radius
+border-start-start-radius border-style border-top border-top-color
+border-top-left-radius border-top-right-radius border-top-style border-top-width
+border-width bottom box-decoration-break box-shadow box-sizing break-after
+break-before break-inside caption-side caret-color clear clip clip-path
+clip-rule color color-interpolation-filters color-scheme column-count column-fill
+column-gap column-rule column-rule-color column-rule-style column-rule-width
+column-span column-width columns contain contain-intrinsic-size container
+container-name container-type content counter-increment counter-reset counter-set
+cursor cx cy direction display dominant-baseline empty-cells fill fill-opacity
+fill-rule filter flex flex-basis flex-direction flex-flow flex-grow flex-shrink
+flex-wrap float flood-color flood-opacity font font-family font-feature-settings
+font-kerning font-language-override font-optical-sizing font-palette
+font-size font-size-adjust font-stretch font-style font-synthesis
+font-variant font-variant-alternates font-variant-caps font-variant-east-asian
+font-variant-emoji font-variant-ligatures font-variant-numeric
+font-variant-position font-variation-settings font-weight gap grid grid-area
+grid-auto-columns grid-auto-flow grid-auto-rows grid-column grid-column-end
+grid-column-start grid-row grid-row-end grid-row-start grid-template
+grid-template-areas grid-template-columns grid-template-rows height hyphens
+image-orientation image-rendering inline-size inset inset-block inset-block-end
+inset-block-start inset-inline inset-inline-end inset-inline-start isolation
+justify-content justify-items justify-self left letter-spacing line-break
+line-height list-style list-style-image list-style-position list-style-type
+margin margin-block margin-block-end margin-block-start margin-bottom
+margin-inline margin-inline-end margin-inline-start margin-left margin-right
+margin-top mask mask-clip mask-composite mask-image mask-mode mask-origin
+mask-position mask-repeat mask-size mask-type max-block-size max-height
+max-inline-size max-width min-block-size min-height min-inline-size min-width
+mix-blend-mode object-fit object-position object-view-box offset offset-distance
+offset-path offset-rotate opacity order orphans outline outline-color
+outline-offset outline-style outline-width overflow overflow-anchor
+overflow-block overflow-clip-margin overflow-inline overflow-wrap overflow-x
+overflow-y overscroll-behavior overscroll-behavior-block overscroll-behavior-inline
+overscroll-behavior-x overscroll-behavior-y padding padding-block
+padding-block-end padding-block-start padding-bottom padding-inline
+padding-inline-end padding-inline-start padding-left padding-right padding-top
+page-break-after page-break-before page-break-inside paint-order perspective
+perspective-origin place-content place-items place-self pointer-events position
+quotes r resize right rotate row-gap ruby-align ruby-position scale scroll-behavior
+scroll-margin scroll-margin-block scroll-margin-bottom scroll-margin-inline
+scroll-margin-left scroll-margin-right scroll-margin-top scroll-padding
+scroll-padding-block scroll-padding-bottom scroll-padding-inline
+scroll-padding-left scroll-padding-right scroll-padding-top scroll-snap-align
+scroll-snap-stop scroll-snap-type scrollbar-color scrollbar-gutter scrollbar-width
+shape-image-threshold shape-margin shape-outside shape-rendering stop-color
+stop-opacity stroke stroke-dasharray stroke-dashoffset stroke-linecap
+stroke-linejoin stroke-miterlimit stroke-opacity stroke-width tab-size
+table-layout text-align text-align-last text-anchor text-combine-upright
+text-decoration text-decoration-color text-decoration-line text-decoration-skip-ink
+text-decoration-style text-decoration-thickness text-emphasis text-emphasis-color
+text-emphasis-position text-emphasis-style text-indent text-justify
+text-orientation text-overflow text-rendering text-shadow text-transform
+text-underline-offset text-underline-position text-wrap text-wrap-mode
+text-wrap-style top touch-action transform transform-box transform-origin
+transform-style transition transition-behavior transition-delay
+transition-duration transition-property transition-timing-function translate
+unicode-bidi user-select vector-effect vertical-align view-transition-class
+view-transition-name visibility white-space widows width will-change word-break
+word-spacing writing-mode x y z-index zoom
+"#;
+
+/// CSS property names that are also very common *values*. They still work as
+/// properties at the start of a line, but they do not end an inline value list,
+/// so `display flex` reads as one property with one value rather than two
+/// properties with none.
+pub const VALUE_UNSAFE_PROPERTIES: &[&str] = &["flex", "grid", "content", "contain", "table", "list"];
+
+/// Looks a CSS property up in the allowlist.
+pub fn is_css_property(name: &str) -> bool {
+    use std::collections::HashSet;
+    use std::sync::OnceLock;
+    static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    let set = SET.get_or_init(|| CSS_PROPERTIES.split_whitespace().collect());
+    set.contains(name)
+}
+
 /// True when `name` can be used as a style property.
 pub fn is_property(name: &str) -> bool {
-    if SINGLE_WORD_PROPERTIES.contains(&name) {
-        return true;
+    SINGLE_WORD_PROPERTIES.contains(&name)
+        || PROPERTY_ALIASES.iter().any(|(alias, _)| *alias == name)
+        || is_css_property(name)
+}
+
+/// Words that always end an inline value list, because they can only introduce a
+/// new construct.
+///
+/// This is *not* the same as [`RESERVED`]: `none`, `true`, `false`, `and`, `or`
+/// and `not` are reserved but are also ordinary values and operators, so they
+/// must never terminate a value list.
+pub const ITEM_KEYWORDS: &[&str] = &[
+    "on", "when", "bind", "show", "key", "if", "else", "each", "in", "then", "let", "derive",
+    "fn", "children", "slot", "return", "persist", "match", "route", "layout", "guard", "fetch",
+    "stream", "validate", "global", "shared", "import", "export", "debug", "assert", "catch",
+    "fallback", "enter", "exit", "await", "async", "component", "theme",
+];
+
+/// True when `name` always ends a value list and starts a new item.
+pub fn hard_item(name: &str) -> bool {
+    ITEM_KEYWORDS.contains(&name)
+}
+
+/// True when `name` ends a value list once the property already has a value.
+///
+/// Splitting terminators into "hard" and "soft" is what lets both of these read
+/// correctly, even though `left` is a property and `hidden` is a modifier:
+///
+/// ```text
+/// text-align left        -- one property, one value
+/// position absolute left 0   -- two properties
+/// visibility hidden      -- one property, one value
+/// box hidden             -- one modifier
+/// ```
+pub fn soft_item(name: &str) -> bool {
+    if VALUE_UNSAFE_PROPERTIES.contains(&name) {
+        return false;
     }
-    PROPERTY_ALIASES.iter().any(|(alias, _)| *alias == name) || name.contains('-')
+    MODIFIERS.contains(&name)
+        || ATTRIBUTES.contains(&name)
+        || pseudo(name).is_some()
+        || is_property(name)
+}
+
+/// True when `name` can start a new item on the same line.
+pub fn starts_a_new_item(name: &str) -> bool {
+    hard_item(name) || soft_item(name)
 }
 
 /// Maps a Plain property name to the CSS property it emits.
@@ -607,6 +762,38 @@ pub fn css_property(name: &str) -> String {
         }
     }
     name.to_string()
+}
+
+/// Suggests the closest known property name, for diagnostics.
+pub fn suggest_property(name: &str) -> Option<&'static str> {
+    let target: Vec<char> = name.chars().collect();
+    let mut best: Option<(&'static str, usize)> = None;
+    for candidate in SINGLE_WORD_PROPERTIES.iter().chain(MODIFIERS.iter()) {
+        let distance = edit_distance(&target, &candidate.chars().collect::<Vec<char>>());
+        let better = match best {
+            Some((_, best_distance)) => distance < best_distance,
+            None => true,
+        };
+        if distance <= 2 && better {
+            best = Some((candidate, distance));
+        }
+    }
+    best.map(|(candidate, _)| candidate)
+}
+
+/// Small Levenshtein distance, used only to make "did you mean" suggestions.
+pub fn edit_distance(a: &[char], b: &[char]) -> usize {
+    let mut previous: Vec<usize> = (0..=b.len()).collect();
+    let mut current = vec![0usize; b.len() + 1];
+    for i in 1..=a.len() {
+        current[0] = i;
+        for j in 1..=b.len() {
+            let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
+            current[j] = (previous[j] + 1).min(current[j - 1] + 1).min(previous[j - 1] + cost);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[b.len()]
 }
 
 /// Properties that become HTML attributes rather than CSS declarations.
@@ -852,8 +1039,50 @@ mod tests {
         assert!(is_property("font-size"));
         assert!(is_property("border-bottom-width"));
         assert!(!is_property("blorb"));
+        assert!(!is_property("system-ui"), "a font name is not a property");
         assert_eq!(css_property("radius"), "border-radius");
         assert_eq!(css_property("font-size"), "font-size");
+    }
+
+    #[test]
+    fn css_values_do_not_look_like_items_at_all() {
+        // `display flex` and `flex-direction row` must read as one property each.
+        for value in ["flex", "grid", "row", "column", "content", "table", "list"] {
+            assert!(!starts_a_new_item(value), "{value} should stay a value");
+        }
+        // Ordinary CSS values that are not property names.
+        for value in ["line-through", "space-between", "system-ui", "flex-start", "solid"] {
+            assert!(!starts_a_new_item(value), "{value} should stay a value");
+        }
+    }
+
+    #[test]
+    fn hard_items_always_end_a_value_list() {
+        for name in ["on", "when", "bind", "show", "if", "each", "let"] {
+            assert!(hard_item(name), "{name} introduces a construct");
+        }
+        // Values and operators are reserved words but never item starters.
+        for name in ["none", "true", "false", "and", "or", "not"] {
+            assert!(!hard_item(name), "{name} is a value, not an item");
+        }
+    }
+
+    #[test]
+    fn soft_items_end_a_value_list_only_after_one_value() {
+        // `text-align left` -> left is a value; `position absolute left 0` -> two items.
+        assert!(soft_item("left"));
+        assert!(soft_item("top"));
+        assert!(soft_item("color"));
+        assert!(soft_item("padding"));
+        assert!(soft_item("hidden"), "a modifier is a soft item");
+        assert!(!soft_item("center"));
+    }
+
+    #[test]
+    fn suggestions_are_close_but_not_wild() {
+        assert_eq!(suggest_property("colr"), Some("color"));
+        assert_eq!(suggest_property("pading"), Some("padding"));
+        assert_eq!(suggest_property("zzzzzzzzz"), None);
     }
 
     #[test]

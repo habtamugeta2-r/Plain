@@ -144,7 +144,11 @@ pub struct Use {
     pub props: Vec<(Span, String, Expr)>,
     /// Positional props: `Card "Hello" 3`.
     pub positional: Vec<Expr>,
+    /// Style properties written on the invocation; they apply to the wrapper the
+    /// component is rendered into.
     pub props_style: Vec<StyleProp>,
+    pub pseudos: Vec<PseudoBlock>,
+    pub responsive: Vec<ResponsiveBlock>,
     pub attrs: Vec<AttrProp>,
     pub modifiers: Vec<Modifier>,
     pub handlers: Vec<Handler>,

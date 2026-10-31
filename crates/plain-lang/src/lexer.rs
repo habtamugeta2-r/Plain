@@ -24,7 +24,17 @@ pub enum TokenKind {
     Dedent,
     Eof,
     Name,
-    Str,
+    /// Opens a string literal. The literal's pieces follow inline so that
+    /// interpolations keep real spans into the original file.
+    StrStart,
+    /// A decoded run of literal text inside a string.
+    StrText,
+    /// Closes a string literal.
+    StrEnd,
+    /// Opens an interpolation `~(`.
+    InterpStart,
+    /// Closes an interpolation `)`.
+    InterpEnd,
     Int,
     Float,
     Length,
@@ -45,6 +55,8 @@ pub enum TokenKind {
     Arrow,
     Dot,
     DotDot,
+    /// `...`, used for spreads inside lists and records.
+    Ellipsis,
     Comma,
     Colon,
     Question,
@@ -64,7 +76,11 @@ impl TokenKind {
             TokenKind::Dedent => "end of block",
             TokenKind::Eof => "end of file",
             TokenKind::Name => "a name",
-            TokenKind::Str => "a string",
+            TokenKind::StrStart => "a string",
+            TokenKind::StrText => "string text",
+            TokenKind::StrEnd => "the end of a string",
+            TokenKind::InterpStart => "the start of an interpolation",
+            TokenKind::InterpEnd => "the end of an interpolation",
             TokenKind::Int | TokenKind::Float => "a number",
             TokenKind::Length => "a measurement",
             TokenKind::Color => "a colour",
@@ -84,6 +100,7 @@ impl TokenKind {
             TokenKind::Arrow => "`=>`",
             TokenKind::Dot => "`.`",
             TokenKind::DotDot => "`..`",
+            TokenKind::Ellipsis => "`...`",
             TokenKind::Comma => "`,`",
             TokenKind::Colon => "`:`",
             TokenKind::Question => "`?`",
@@ -96,14 +113,6 @@ impl TokenKind {
     }
 }
 
-/// One piece of a string literal. Interpolations keep their source text and
-/// span so the parser can re-lex them as expressions.
-#[derive(Debug, Clone, PartialEq)]
-pub enum StrPart {
-    Text(String),
-    Expr(String, Span),
-}
-
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
@@ -114,8 +123,6 @@ pub struct Token {
     pub value: f64,
     /// CSS unit for `Length`, e.g. `px`. Empty when there is none.
     pub unit: String,
-    /// Decoded pieces of a `Str`.
-    pub parts: Vec<StrPart>,
 }
 
 impl Token {
@@ -126,7 +133,6 @@ impl Token {
             text: text.into(),
             value: 0.0,
             unit: String::new(),
-            parts: Vec::new(),
         }
     }
 
@@ -134,7 +140,7 @@ impl Token {
     pub fn describe(&self) -> String {
         match self.kind {
             TokenKind::Name => format!("`{}`", self.text),
-            TokenKind::Str => format!("the string \"{}\"", self.text),
+            TokenKind::StrText => format!("the text \"{}\"", self.text),
             TokenKind::Int | TokenKind::Float | TokenKind::Length => format!("`{}`", self.text),
             TokenKind::Color => format!("the colour `{}`", self.text),
             other => other.describe().to_string(),
@@ -147,7 +153,8 @@ impl Token {
         matches!(
             self.kind,
             TokenKind::Name
-                | TokenKind::Str
+                | TokenKind::StrText
+                | TokenKind::StrEnd
                 | TokenKind::Int
                 | TokenKind::Float
                 | TokenKind::Length
@@ -259,14 +266,7 @@ impl Lexer {
                     }
                     content += 1;
                 }
-                out.push(Line {
-                    start,
-                    end,
-                    indent,
-                    content,
-                    tab,
-                    tab_at,
-                });
+                out.push(Line { start, end, indent, content, tab, tab_at });
                 start = index + 1;
             }
             if at_end {
@@ -342,8 +342,14 @@ impl Lexer {
 
     /// Tokenizes one line's content, stopping at a comment or at `end`.
     fn tokenize(&mut self, end: usize) {
+        self.tokenize_range(end, true)
+    }
+
+    /// `comments` is false inside an interpolation, where a `--` is part of the
+    /// expression rather than a comment.
+    fn tokenize_range(&mut self, end: usize, comments: bool) {
         while self.pos < end {
-            if self.at_comment(self.pos, end) {
+            if comments && self.at_comment(self.pos, end) {
                 return;
             }
             let ch = self.chars[self.pos];
@@ -421,11 +427,7 @@ impl Lexer {
             break;
         }
         let text: String = self.chars[start..self.pos].iter().collect();
-        self.push(Token::simple(
-            TokenKind::Name,
-            self.span(start, self.pos),
-            text,
-        ));
+        self.push(Token::simple(TokenKind::Name, self.span(start, self.pos), text));
     }
 
     fn lex_number(&mut self, end: usize) {
@@ -449,8 +451,7 @@ impl Lexer {
         }
         let digits_end = self.pos;
         let unit_start = self.pos;
-        if self.pos < end
-            && (self.chars[self.pos] == '%' || self.chars[self.pos].is_ascii_alphabetic())
+        if self.pos < end && (self.chars[self.pos] == '%' || self.chars[self.pos].is_ascii_alphabetic())
         {
             while self.pos < end
                 && (self.chars[self.pos].is_ascii_alphanumeric() || self.chars[self.pos] == '%')
@@ -506,14 +507,28 @@ impl Lexer {
 
     fn lex_string(&mut self, end: usize) {
         let start = self.pos;
+        self.push_simple(TokenKind::StrStart, self.span_at(start));
         self.pos += 1;
-        let mut parts: Vec<StrPart> = Vec::new();
         let mut buf = String::new();
+        let mut chunk_start = self.pos;
         let mut closed = false;
+
+        // Emits the literal text accumulated so far.
+        macro_rules! flush {
+            () => {
+                if !buf.is_empty() {
+                    let text = std::mem::take(&mut buf);
+                    let span = self.span(chunk_start, self.pos);
+                    self.push(Token::simple(TokenKind::StrText, span, text));
+                }
+                chunk_start = self.pos;
+            };
+        }
 
         while self.pos < end {
             let ch = self.chars[self.pos];
             if ch == '"' {
+                flush!();
                 self.pos += 1;
                 closed = true;
                 break;
@@ -546,7 +561,7 @@ impl Lexer {
                             format!("`\\{escape}` is not an escape sequence Plain knows"),
                             self.span(self.pos - 1, self.pos + 1),
                         )
-                        .note("Supported escapes: \\n \\t \\r \\0 \\\\ \\\" \\' \\~")
+                        .note("Supported escapes: \\n \\t \\r \\0 \\\\ \\" \\' \\~")
                         .suggest(format!("Write `\\\\{escape}` to get a literal backslash."));
                         buf.push(escape);
                         self.pos += 1;
@@ -555,54 +570,39 @@ impl Lexer {
                 continue;
             }
             if ch == '~' && self.pos + 1 < end && self.chars[self.pos + 1] == '(' {
-                if !buf.is_empty() {
-                    parts.push(StrPart::Text(std::mem::take(&mut buf)));
-                }
+                flush!();
+                let open = self.pos;
                 self.pos += 2;
+                self.push_simple(TokenKind::InterpStart, self.span(open, self.pos));
                 let expr_start = self.pos;
-                let mut depth = 1usize;
-                while self.pos < end && depth > 0 {
-                    let inner = self.chars[self.pos];
-                    if inner == '"' {
-                        self.pos += 1;
-                        while self.pos < end && self.chars[self.pos] != '"' {
-                            if self.chars[self.pos] == '\\' {
-                                self.pos += 1;
-                            }
-                            if self.pos < end {
-                                self.pos += 1;
-                            }
+                match self.find_matching_paren(expr_start, end) {
+                    Some(expr_end) => {
+                        if expr_end == expr_start {
+                            self.error(
+                                "E005",
+                                "This interpolation is empty",
+                                self.span(open, expr_end + 1),
+                            )
+                            .suggest("Put an expression inside: `~(count + 1)`.");
                         }
-                    } else if inner == '(' {
-                        depth += 1;
-                    } else if inner == ')' {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
+                        let saved = self.pos;
+                        self.pos = expr_start;
+                        self.tokenize_range(expr_end, false);
+                        self.pos = expr_end + 1;
+                        self.push_simple(TokenKind::InterpEnd, self.span(expr_end, self.pos));
+                        let _ = saved;
                     }
-                    self.pos += 1;
+                    None => {
+                        self.error(
+                            "E005",
+                            "This interpolation is missing its closing `)`",
+                            self.span(open, end),
+                        )
+                        .suggest("Close it: `\"~(user.name)\"`.");
+                        break;
+                    }
                 }
-                if depth != 0 {
-                    self.error(
-                        "E005",
-                        "This interpolation is missing its closing `)`",
-                        self.span(expr_start.saturating_sub(2), self.pos),
-                    )
-                    .suggest("Close it: `\"~(user.name)\"`.");
-                    break;
-                }
-                let source: String = self.chars[expr_start..self.pos].iter().collect();
-                if source.trim().is_empty() {
-                    self.error(
-                        "E005",
-                        "This interpolation is empty",
-                        self.span(expr_start.saturating_sub(2), self.pos + 1),
-                    )
-                    .suggest("Put an expression inside: `~(count + 1)`.");
-                }
-                parts.push(StrPart::Expr(source, self.span(expr_start, self.pos)));
-                self.pos += 1;
+                chunk_start = self.pos;
                 continue;
             }
             if ch == '~' {
@@ -628,32 +628,44 @@ impl Lexer {
             )
             .note("Strings run to the end of the line; multi-line strings are planned for v0.2.")
             .suggest("Add a `\"` at the end of the line.");
+            flush!();
         }
-        if !buf.is_empty() {
-            parts.push(StrPart::Text(buf));
-        }
+        self.push_simple(TokenKind::StrEnd, self.span_at(self.pos.min(self.chars.len())));
+    }
 
-        let mut token = Token::simple(TokenKind::Str, self.span(start, self.pos), "");
-        let inner_start = (start + 1).min(self.chars.len());
-        let inner_end = if closed {
-            self.pos.saturating_sub(1)
-        } else {
-            self.pos.min(end)
-        };
-        let inner_end = inner_end.max(inner_start).min(self.chars.len());
-        token.text = self.chars[inner_start..inner_end].iter().collect();
-        token.parts = parts;
-        self.push(token);
+    /// Finds the `)` matching an already-consumed `(`, skipping over strings.
+    fn find_matching_paren(&self, from: usize, end: usize) -> Option<usize> {
+        let mut depth = 1usize;
+        let mut index = from;
+        while index < end {
+            match self.chars[index] {
+                '"' => {
+                    index += 1;
+                    while index < end && self.chars[index] != '"' {
+                        if self.chars[index] == '\\' {
+                            index += 1;
+                        }
+                        index += 1;
+                    }
+                }
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(index);
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        None
     }
 
     fn lex_operator(&mut self, end: usize) {
         let start = self.pos;
         let ch = self.chars[self.pos];
-        let next = if self.pos + 1 < end {
-            Some(self.chars[self.pos + 1])
-        } else {
-            None
-        };
+        let next = if self.pos + 1 < end { Some(self.chars[self.pos + 1]) } else { None };
         let (kind, length) = match (ch, next) {
             ('=', Some('>')) => (TokenKind::Arrow, 2),
             ('=', Some('=')) => (TokenKind::EqEq, 2),
@@ -669,7 +681,13 @@ impl Lexer {
             ('<', _) => (TokenKind::Lt, 1),
             ('>', Some('=')) => (TokenKind::GtEq, 2),
             ('>', _) => (TokenKind::Gt, 1),
-            ('.', Some('.')) => (TokenKind::DotDot, 2),
+            ('.', Some('.')) => {
+                if self.pos + 2 < end && self.chars[self.pos + 2] == '.' {
+                    (TokenKind::Ellipsis, 3)
+                } else {
+                    (TokenKind::DotDot, 2)
+                }
+            }
             ('.', _) => (TokenKind::Dot, 1),
             ('+', _) => (TokenKind::Plus, 1),
             ('-', _) => (TokenKind::Minus, 1),
@@ -682,11 +700,7 @@ impl Lexer {
             ('&', Some('&')) | ('|', Some('|')) => {
                 let name = if ch == '&' { "and" } else { "or" };
                 self.pos += 2;
-                self.push(Token::simple(
-                    TokenKind::Name,
-                    self.span(start, self.pos),
-                    name,
-                ));
+                self.push(Token::simple(TokenKind::Name, self.span(start, self.pos), name));
                 return;
             }
             ('|', _) => (TokenKind::Pipe, 1),
@@ -736,8 +750,9 @@ impl Lexer {
     }
 
     fn error(&mut self, code: &str, title: impl Into<String>, span: Span) -> &mut Self {
-        self.errors
-            .push(Diagnostic::error(code, title, self.file).with_label(span, String::new()));
+        self.errors.push(
+            Diagnostic::error(code, title, self.file).with_label(span, String::new()),
+        );
         self
     }
 
@@ -836,10 +851,14 @@ mod tests {
                 TokenKind::Newline,
                 TokenKind::Indent,
                 TokenKind::Name,
-                TokenKind::Str,
+                TokenKind::StrStart,
+                TokenKind::StrText,
+                TokenKind::StrEnd,
                 TokenKind::Newline,
                 TokenKind::Name,
-                TokenKind::Str,
+                TokenKind::StrStart,
+                TokenKind::StrText,
+                TokenKind::StrEnd,
                 TokenKind::Newline,
                 TokenKind::Dedent,
                 TokenKind::Name,
@@ -857,7 +876,9 @@ mod tests {
                 TokenKind::Newline,
                 TokenKind::Indent,
                 TokenKind::Name,
-                TokenKind::Str,
+                TokenKind::StrStart,
+                TokenKind::StrText,
+                TokenKind::StrEnd,
             ]
         );
     }
@@ -875,11 +896,7 @@ mod tests {
         assert_eq!(texts("count - 1"), vec!["count"]);
         let (_, errors) = lex_source("count-1");
         assert!(errors.is_empty());
-        assert_eq!(
-            texts("count-1"),
-            vec!["count-1"],
-            "a tight hyphen continues the name"
-        );
+        assert_eq!(texts("count-1"), vec!["count-1"], "a tight hyphen continues the name");
     }
 
     #[test]
@@ -899,22 +916,11 @@ mod tests {
             .collect();
         assert_eq!(
             lengths,
-            vec![
-                (12.0, "px".into()),
-                (1.5, "rem".into()),
-                (100.0, "%".into())
-            ]
+            vec![(12.0, "px".into()), (1.5, "rem".into()), (100.0, "%".into())]
         );
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Int && t.value == 42.0));
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Float && t.value == 3.14));
-        assert_eq!(
-            tokens.iter().filter(|t| t.kind == TokenKind::Color).count(),
-            2
-        );
+        assert!(tokens.iter().any(|t| t.kind == TokenKind::Int && t.value == 42.0));
+        assert!(tokens.iter().any(|t| t.kind == TokenKind::Float && t.value == 3.14));
+        assert_eq!(tokens.iter().filter(|t| t.kind == TokenKind::Color).count(), 2);
     }
 
     #[test]
@@ -934,45 +940,97 @@ mod tests {
         assert!(errors[0].title.contains("not a unit"));
     }
 
+    fn string_parts(source: &str) -> Vec<String> {
+        let (tokens, errors) = lex_source(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        tokens
+            .iter()
+            .filter(|t| matches!(t.kind, TokenKind::StrText | TokenKind::InterpStart))
+            .map(|t| match t.kind {
+                TokenKind::StrText => format!("text:{}", t.text),
+                _ => "interp".to_string(),
+            })
+            .collect()
+    }
+
+    fn interpolation_source(source: &str) -> Vec<String> {
+        let (tokens, errors) = lex_source(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut out = Vec::new();
+        let mut inside = false;
+        let mut current = String::new();
+        for token in &tokens {
+            match token.kind {
+                TokenKind::InterpStart => {
+                    inside = true;
+                    current.clear();
+                }
+                TokenKind::InterpEnd => {
+                    inside = false;
+                    out.push(current.trim().to_string());
+                }
+                _ if inside => {
+                    if !current.is_empty() && needs_space_before(&token.text, &current) {
+                        current.push(' ');
+                    }
+                    current.push_str(&token.text);
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    fn needs_space_before(text: &str, so_far: &str) -> bool {
+        let last = so_far.chars().last().unwrap_or(' ');
+        let first = text.chars().next().unwrap_or(' ');
+        !(matches!(last, '(' | '[' | '.' | '~') || matches!(first, ')' | ']' | ',' | '.'))
+    }
+
     #[test]
     fn strings_decode_escapes() {
-        let (tokens, errors) = lex_source(r#"text "a\nb\"c""#);
-        assert!(errors.is_empty(), "{errors:?}");
-        let string = tokens.iter().find(|t| t.kind == TokenKind::Str).unwrap();
-        assert_eq!(string.parts, vec![StrPart::Text("a\nb\"c".to_string())]);
+        assert_eq!(string_parts(r#"text "a\nb\"c""#), vec!["text:a
+b"c"]);
     }
 
     #[test]
     fn strings_split_interpolations() {
-        let (tokens, errors) = lex_source(r#"text "Count: ~(count + 1) items""#);
+        assert_eq!(
+            string_parts(r#"text "Count: ~(count + 1) items""#),
+            vec!["text:Count: ", "interp", "text: items"]
+        );
+        assert_eq!(interpolation_source(r#"text "Count: ~(count + 1) items""#), vec!["count + 1"]);
+    }
+
+    #[test]
+    fn interpolation_spans_point_into_the_real_file() {
+        let source = r#"text "~(count)""#;
+        let (tokens, errors) = lex_source(source);
         assert!(errors.is_empty(), "{errors:?}");
-        let string = tokens.iter().find(|t| t.kind == TokenKind::Str).unwrap();
-        assert_eq!(string.parts.len(), 3);
-        assert_eq!(string.parts[0], StrPart::Text("Count: ".to_string()));
-        match &string.parts[1] {
-            StrPart::Expr(source, _) => assert_eq!(source, "count + 1"),
-            other => panic!("expected an interpolation, got {other:?}"),
-        }
-        assert_eq!(string.parts[2], StrPart::Text(" items".to_string()));
+        let name = tokens.iter().find(|t| t.text == "count").unwrap();
+        assert_eq!(&source[name.span.start as usize..name.span.end as usize], "count");
     }
 
     #[test]
     fn interpolation_can_contain_a_string_and_nested_parens() {
-        let (tokens, errors) = lex_source(r#""~(if n == 1 then "item" else "items")""#);
-        assert!(errors.is_empty(), "{errors:?}");
-        let string = tokens.iter().find(|t| t.kind == TokenKind::Str).unwrap();
-        match &string.parts[0] {
-            StrPart::Expr(source, _) => assert_eq!(source, r#"if n == 1 then "item" else "items""#),
-            other => panic!("expected an interpolation, got {other:?}"),
-        }
+        assert_eq!(
+            interpolation_source(r#""~(if n == 1 then "item" else "items")""#),
+            vec![r#"if n == 1 then "item" else "items""#]
+        );
     }
 
     #[test]
     fn a_double_hyphen_inside_a_string_is_not_a_comment() {
-        let (tokens, errors) = lex_source(r#"text "a--b""#);
+        assert_eq!(string_parts(r#"text "a--b""#), vec!["text:a--b"]);
+    }
+
+    #[test]
+    fn ellipsis_and_range_are_distinct() {
+        let (tokens, errors) = lex_source("[...items] 1..5");
         assert!(errors.is_empty(), "{errors:?}");
-        let string = tokens.iter().find(|t| t.kind == TokenKind::Str).unwrap();
-        assert_eq!(string.parts, vec![StrPart::Text("a--b".to_string())]);
+        let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+        assert!(kinds.contains(&TokenKind::Ellipsis));
+        assert!(kinds.contains(&TokenKind::DotDot));
     }
 
     #[test]
@@ -995,9 +1053,7 @@ mod tests {
         let (tokens, errors) = lex_source("text \"oops\nbox\n");
         assert!(errors.iter().any(|e| e.code == "E003"), "{errors:?}");
         // Lexing continues, so the next line still produces tokens.
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Name && t.text == "box"));
+        assert!(tokens.iter().any(|t| t.kind == TokenKind::Name && t.text == "box"));
     }
 
     #[test]
