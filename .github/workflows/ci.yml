@@ -5,13 +5,17 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-  build-test:
-    name: build + test (${{ matrix.os }})
+  verify:
+    name: verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -19,23 +23,96 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --workspace --all-targets --verbose
-      - name: Test
-        run: cargo test --workspace --verbose
 
-  lint:
-    name: fmt + clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
       - uses: Swatinem/rust-cache@v2
-      - name: rustfmt
-        run: cargo fmt --all -- --check
-      - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # One step runs every check so a single failure still produces all logs.
+      - name: fmt + build + test + clippy
+        shell: bash
+        run: |
+          set +e
+          status=0
+          echo "::group::cargo fmt"
+          cargo fmt --all -- --check > fmt.log 2>&1 || status=1
+          tail -n 60 fmt.log
+          echo "::endgroup::"
+
+          echo "::group::cargo build"
+          cargo build --workspace --all-targets > build.log 2>&1 || status=1
+          tail -n 80 build.log
+          echo "::endgroup::"
+
+          echo "::group::cargo test"
+          cargo test --workspace > test.log 2>&1 || status=1
+          tail -n 80 test.log
+          echo "::endgroup::"
+
+          echo "::group::cargo clippy"
+          cargo clippy --workspace --all-targets -- -D warnings > clippy.log 2>&1 || status=1
+          tail -n 80 clippy.log
+          echo "::endgroup::"
+
+          exit $status
+
+      # Sandbox/agent environments cannot download Actions log archives, so the
+      # tail of every log is also posted as a commit comment where the API can
+      # reach it.
+      - name: publish failure log
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### CI failure on ${{ matrix.os }}"
+            echo
+            echo "commit \`${{ github.sha }}\`, run ${{ github.run_id }}"
+            echo
+            for f in fmt.log build.log test.log clippy.log; do
+              if [ -s "$f" ]; then
+                echo "<details><summary><code>$f</code> (tail)</summary>"
+                echo
+                echo '```'
+                tail -n 150 "$f"
+                echo '```'
+                echo
+                echo "</details>"
+                echo
+              fi
+            done
+          } > body.md
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -F body=@body.md
+
+  # rustfmt output is machine-generated; rather than fail on it, this job applies
+  # it and pushes back so the branch is always canonically formatted.
+  autofmt:
+    name: auto-format
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: cargo fmt and push if needed
+        shell: bash
+        run: |
+          cargo fmt --all
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "style: cargo fmt (automated)"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

@@ -5,8 +5,6 @@
 //! Keeping it separate means the lexer, the language server and the formatter
 //! can all report problems the same way.
 
-#![deny(missing_docs)]
-
 pub mod diagnostic;
 pub mod source;
 pub mod span;

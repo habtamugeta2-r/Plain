@@ -72,7 +72,9 @@ impl SourceFile {
     /// The text covered by `span`.
     pub fn slice(&self, span: Span) -> &str {
         let span = self.clamp(span);
-        &self.text[span.start as usize..span.end as usize]
+        self.text
+            .get(span.start as usize..span.end as usize)
+            .unwrap_or("")
     }
 }
 
