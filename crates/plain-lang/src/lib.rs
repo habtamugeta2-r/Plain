@@ -3,8 +3,8 @@
 //! The pipeline is deliberately boring and easy to follow:
 //!
 //! ```text
-//! source -> lexer -> tokens -> parser -> AST -> check -> typed AST
-//!        -> css::emit + js::emit -> Bundle
+//! source -> lexer -> tokens -> parser -> AST -> css::collect -> check
+//!        -> js::emit -> Bundle
 //! ```
 //!
 //! Every stage returns plain data and a list of [`Diagnostic`]s. No stage
@@ -14,6 +14,7 @@
 
 pub mod ast;
 pub mod cli;
+pub mod css;
 pub mod expr;
 pub mod lexer;
 pub mod parser;

@@ -262,11 +262,7 @@ pub fn to_js(expr: &Expr, scope: &Scope) -> String {
         }
         Expr::Method(target, name, args, _) => method(target, name, args, scope),
         Expr::Unary(operator, operand, _) => {
-            let js = if operator == "not" {
-                "!"
-            } else {
-                operator.as_str()
-            };
+            let js = if operator == "not" { "!" } else { operator.as_str() };
             format!("({js}{})", to_js(operand, scope))
         }
         Expr::Binary(operator, left, right, _) => binary(operator, left, right, scope),
@@ -320,10 +316,13 @@ pub fn is_dynamic(expr: &Expr, scope: &Scope) -> bool {
         }),
         Expr::Member(target, _, _) => {
             is_dynamic(target, scope)
-                || matches!(target, Expr::Name(name) if REACTIVE_NAMESPACES.contains(&name.as_str()))
+                || matches!(&**target, Expr::Name(name, _)
+                    if REACTIVE_NAMESPACES.contains(&name.as_str()))
         }
         Expr::Unary(_, operand, _) | Expr::Spread(operand, _) => is_dynamic(operand, scope),
-        Expr::Index(target, index, _) => is_dynamic(target, scope) || is_dynamic(index, scope),
+        Expr::Index(target, index, _) => {
+            is_dynamic(target, scope) || is_dynamic(index, scope)
+        }
         Expr::Binary(_, left, right, _) => is_dynamic(left, scope) || is_dynamic(right, scope),
         Expr::Pipe(left, right, _) => is_dynamic(left, scope) || is_dynamic(right, scope),
         Expr::Range(from, to, _) => is_dynamic(from, scope) || is_dynamic(to, scope),
@@ -331,7 +330,9 @@ pub fn is_dynamic(expr: &Expr, scope: &Scope) -> bool {
             is_dynamic(condition, scope) || is_dynamic(then, scope) || is_dynamic(otherwise, scope)
         }
         Expr::List(items, _) => items.iter().any(|item| is_dynamic(item, scope)),
-        Expr::Record(fields, _) => fields.iter().any(|(_, value)| is_dynamic(value, scope)),
+        Expr::Record(fields, _) => fields
+            .iter()
+            .any(|(_, value)| is_dynamic(value, scope)),
         Expr::Method(target, _, args, _) => {
             is_dynamic(target, scope) || args.iter().any(|arg| is_dynamic(arg, scope))
         }
@@ -341,11 +342,9 @@ pub fn is_dynamic(expr: &Expr, scope: &Scope) -> bool {
             // v0.1 does not analyse bodies to find out. Getting this wrong the
             // other way costs one effect; getting it wrong this way means a page
             // that quietly stops updating.
-            let calls_a_function = matches!(callee, Expr::Name(name)
+            let calls_a_function = matches!(&**callee, Expr::Name(name, _)
                 if scope.binding(name) == Some(Binding::Function));
-            calls_a_function
-                || is_dynamic(callee, scope)
-                || args.iter().any(|a| is_dynamic(a, scope))
+            calls_a_function || is_dynamic(callee, scope) || args.iter().any(|a| is_dynamic(a, scope))
         }
     }
 }
@@ -446,7 +445,11 @@ fn binary(operator: &str, left: &Expr, right: &Expr, scope: &Scope) -> String {
     let nothing = matches!(left, Expr::None(_)) || matches!(right, Expr::None(_));
     if nothing && matches!(operator, "==" | "!=") {
         let js = if operator == "==" { "==" } else { "!=" };
-        return format!("({} {js} null)", to_js(left, scope), to_js(right, scope));
+        return format!(
+            "({} {js} {})",
+            to_js(left, scope),
+            to_js(right, scope)
+        );
     }
     let js = match operator {
         "and" => "&&",
@@ -455,7 +458,11 @@ fn binary(operator: &str, left: &Expr, right: &Expr, scope: &Scope) -> String {
         "!=" => "!==",
         other => other,
     };
-    format!("({} {js} {})", to_js(left, scope), to_js(right, scope))
+    format!(
+        "({} {js} {})",
+        to_js(left, scope),
+        to_js(right, scope)
+    )
 }
 
 fn pipe(left: &Expr, right: &Expr, scope: &Scope) -> String {
@@ -503,7 +510,10 @@ fn record(fields: &[(String, Expr)], scope: &Scope) -> String {
 }
 
 fn string(parts: &[StrPart], scope: &Scope) -> String {
-    if parts.iter().all(|part| matches!(part, StrPart::Text(_))) {
+    if parts
+        .iter()
+        .all(|part| matches!(part, StrPart::Text(_)))
+    {
         let text: String = parts
             .iter()
             .filter_map(|part| match part {
@@ -658,10 +668,7 @@ mod tests {
     #[test]
     fn lists_records_and_spreads() {
         assert_eq!(js("[1, 2, 3]"), "[1, 2, 3]");
-        assert_eq!(
-            js("record(name: \"Ada\", age: 30)"),
-            "{ name: \"Ada\", age: 30 }"
-        );
+        assert_eq!(js("record(name: \"Ada\", age: 30)"), "{ name: \"Ada\", age: 30 }");
         assert_eq!(js("record()"), "{}");
         // A hyphenated key is quoted: JavaScript will not take it bare.
         assert_eq!(
@@ -674,10 +681,7 @@ mod tests {
     #[test]
     fn member_access_quotes_what_javascript_will_not_take() {
         assert_eq!(stateful("user.name", &["user"]), "user().name");
-        assert_eq!(
-            stateful("user.first-name", &["user"]),
-            "user()[\"first-name\"]"
-        );
+        assert_eq!(stateful("user.first-name", &["user"]), "user()[\"first-name\"]");
         // Reserved words are fine after a dot.
         assert_eq!(stateful("field.class", &["field"]), "field().class");
     }
@@ -685,10 +689,7 @@ mod tests {
     #[test]
     fn calls_and_methods_resolve_through_the_runtime() {
         assert_eq!(js("greet(\"Ada\")"), "greet(\"Ada\")");
-        assert_eq!(
-            js("format-date(today, \"en\")"),
-            "P.formatDate(today, \"en\")"
-        );
+        assert_eq!(js("format-date(today, \"en\")"), "P.formatDate(today, \"en\")");
         // A Plain verb takes the receiver as its first argument.
         assert_eq!(js("\"abc\".upper()"), "P.str.upper(\"abc\")");
         assert_eq!(
@@ -703,7 +704,10 @@ mod tests {
     fn a_pipe_puts_the_value_first() {
         assert_eq!(js("\"abc\" | upper"), "P.str.upper(\"abc\")");
         assert_eq!(js("[1, 2] | take(1)"), "P.list.take([1, 2], 1)");
-        assert_eq!(stateful("name | upper", &["name"]), "P.str.upper(name())");
+        assert_eq!(
+            stateful("name | upper", &["name"]),
+            "P.str.upper(name())"
+        );
     }
 
     #[test]
