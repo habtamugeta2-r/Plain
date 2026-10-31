@@ -162,6 +162,10 @@ struct Checker {
     parents: Vec<String>,
     /// True inside a component body, where `children` and `slot` mean something.
     in_component: bool,
+    /// Breakpoints the theme declares. The parser fills in the media query for
+    /// every breakpoint Plain knows, so one it leaves empty is either declared
+    /// here or a mistake.
+    theme_breakpoints: Vec<String>,
 }
 
 /// Checks a program and marks every value that is not known until it runs.
@@ -180,6 +184,7 @@ pub fn check(program: &mut Program) -> Vec<Diagnostic> {
         headings: Vec::new(),
         parents: Vec::new(),
         in_component: false,
+        theme_breakpoints: theme_breakpoints(&program.theme),
     };
 
     // Every component is visible to every other, including itself, so the
@@ -626,6 +631,7 @@ impl Checker {
             }
         }
         for block in element.responsive.iter_mut() {
+            self.breakpoint(&block.name, block.query.is_empty(), block.span);
             for prop in block.props.iter_mut() {
                 self.style(prop);
             }
@@ -638,6 +644,28 @@ impl Checker {
         if element.def.tag == "h1" && level_of(element) == 1 {
             self.headings.push(element.span);
         }
+    }
+
+    /// Reports a breakpoint nothing declares.
+    fn breakpoint(&mut self, name: &str, unresolved: bool, span: Span) {
+        if !unresolved || self.theme_breakpoints.iter().any(|token| token == name) {
+            return;
+        }
+        let mut known: Vec<&str> = tables::BREAKPOINTS.iter().map(|(key, _)| *key).collect();
+        known.extend(self.theme_breakpoints.iter().map(String::as_str));
+        self.error(
+            "E215",
+            format!("`@{name}` is not a breakpoint Plain knows"),
+            span,
+        )
+        .note("A breakpoint is either built in or declared in the theme's `breakpoints` group.")
+        .suggest(match closest_of(name, &known) {
+            Some(candidate) => format!("Did you mean `@{candidate}`?"),
+            None => format!(
+                "The built-in breakpoints are {}, and the theme can add more: `theme\n  breakpoints\n    {name} 1800px`.",
+                list_of(&tables::BREAKPOINTS.iter().map(|(key, _)| *key).collect::<Vec<_>>())
+            ),
+        });
     }
 
     fn attributes(&mut self, element: &mut Element) {
@@ -959,6 +987,19 @@ impl Checker {
             self.nodes(nodes);
         }
     }
+}
+
+/// The breakpoints a theme declares.
+fn theme_breakpoints(theme: &Option<crate::ast::Theme>) -> Vec<String> {
+    let Some(theme) = theme else {
+        return Vec::new();
+    };
+    theme
+        .groups
+        .iter()
+        .filter(|group| group.name == "breakpoints")
+        .flat_map(|group| group.entries.iter().map(|entry| entry.name.clone()))
+        .collect()
 }
 
 /// The named slots a body reads.
@@ -1317,6 +1358,15 @@ mod tests {
         assert!(found.contains(&"W103".to_string()), "{found:?}");
         clean("link \"/about\" \"About\"\n");
         clean("link to \"/about\" \"About\"\n");
+    }
+
+    #[test]
+    fn an_undeclared_breakpoint_is_reported() {
+        assert!(
+            codes("box color red\n  @huge\n    color blue\n").contains(&"E215".to_string())
+        );
+        clean("theme\n  breakpoints\n    huge 1800px\nbox color red\n  @huge\n    color blue\n");
+        clean("box color red\n  @tablet\n    color blue\n");
     }
 
     #[test]

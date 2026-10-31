@@ -204,13 +204,20 @@ impl Builder {
     }
 
     fn responsive_rules(&mut self, block: &ResponsiveBlock, rules: &mut Vec<Rule>) {
-        if block.query.is_empty() {
-            // An unknown breakpoint is reported by the semantic pass; emitting a
-            // rule with no query would apply it everywhere.
+        // The parser fills in the query for every breakpoint Plain knows. A
+        // custom one is declared in the theme, which only this pass can see.
+        let query = if block.query.is_empty() {
+            self.theme.breakpoint(&block.name)
+        } else {
+            Some(block.query.clone())
+        };
+        let Some(query) = query else {
+            // Nothing declares it, and the semantic pass says so. Emitting a rule
+            // with no query would apply it at every width.
             return;
-        }
-        if !self.styles.queries.contains(&block.query) {
-            self.styles.queries.push(block.query.clone());
+        };
+        if !self.styles.queries.contains(&query) {
+            self.styles.queries.push(query.clone());
         }
 
         let mut declarations = self.declarations(&block.props);
@@ -246,12 +253,12 @@ impl Builder {
         if !declarations.is_empty() {
             rules.push(Rule {
                 suffix: String::new(),
-                query: block.query.clone(),
+                query: query.clone(),
                 declarations,
             });
         }
         for pseudo in &block.pseudos {
-            self.pseudo_rules(pseudo, &block.query, rules);
+            self.pseudo_rules(pseudo, &query, rules);
         }
     }
 
@@ -287,6 +294,8 @@ struct ThemeVars {
     /// Category, token name, value.
     entries: Vec<(String, String, String)>,
     dark: Vec<(String, String, String)>,
+    /// Breakpoints the theme declares: name and the media query it stands for.
+    breakpoints: Vec<(String, String)>,
 }
 
 impl ThemeVars {
@@ -298,6 +307,11 @@ impl ThemeVars {
         for group in &theme.groups {
             if group.name == "breakpoints" {
                 // Custom breakpoints extend the media queries, not the variables.
+                for entry in &group.entries {
+                    if let Some(query) = breakpoint_query(entry) {
+                        vars.breakpoints.push((entry.name.clone(), query));
+                    }
+                }
                 continue;
             }
             for entry in &group.entries {
@@ -323,6 +337,14 @@ impl ThemeVars {
         }
     }
 
+    /// The media query a custom breakpoint stands for, if the theme declares it.
+    fn breakpoint(&self, name: &str) -> Option<String> {
+        self.breakpoints
+            .iter()
+            .find(|(token, _)| token == name)
+            .map(|(_, query)| query.clone())
+    }
+
     /// `var(--color-primary)`, when the theme declares that token.
     fn variable(&self, category: &str, name: &str) -> Option<String> {
         let declared = self
@@ -344,6 +366,21 @@ impl ThemeVars {
             .iter()
             .map(|(category, name, value)| (custom_property(category, name), value.clone()))
             .collect()
+    }
+}
+
+/// The media query a theme breakpoint declares. `huge 1800px` is a width and
+/// `reduced-motion` is a feature Plain already knows how to spell.
+fn breakpoint_query(entry: &ThemeEntry) -> Option<String> {
+    match entry.values.as_slice() {
+        [Expr::Length(number, unit, _)] => Some(format!(
+            "(min-width: {}{unit})",
+            trim_number(*number)
+        )),
+        [Expr::Int(number, _)] if *number > 0 => Some(format!("(min-width: {number}px)")),
+        // `@reduced-motion` is a feature Plain already knows how to spell.
+        [Expr::Name(feature, _)] => tables::media_query(feature).map(|query| query.to_string()),
+        _ => None,
     }
 }
 
@@ -789,6 +826,13 @@ mod tests {
     use crate::parser::parse_source;
     use plain_core::Span;
 
+    /// The rules this program produced, without the base stylesheet. Every test
+    /// carries the same three hundred lines of reset, and printing them on
+    /// failure hides the assertion that actually failed.
+    fn generated(text: &str) -> &str {
+        text.strip_prefix(crate::runtime::BASE_CSS).unwrap_or(text)
+    }
+
     /// Parses `source` and collects its styles.
     fn compiled(source: &str) -> (Program, Styles) {
         let (mut program, diagnostics) = parse_source(FileId(0), source);
@@ -813,11 +857,11 @@ mod tests {
         let (program, styles) = compiled("box color red padding 1rem\n");
         assert_eq!(first(&program).class.as_deref(), Some("p1"));
         let text = styles.stylesheet(false);
-        assert!(text.contains(".p1 {"), "{text}");
-        assert!(text.contains("color: red;"), "{text}");
-        assert!(text.contains("padding: 1rem;"), "{text}");
+        assert!(text.contains(".p1 {"), "{}", generated(&text));
+        assert!(text.contains("color: red;"), "{}", generated(&text));
+        assert!(text.contains("padding: 1rem;"), "{}", generated(&text));
         // The base reset comes with it, so one file is the whole stylesheet.
-        assert!(text.starts_with("/* Generated by Plain."), "{text}");
+        assert!(text.starts_with("/* Generated by Plain."), "{}", generated(&text));
     }
 
     #[test]
@@ -838,31 +882,31 @@ mod tests {
     #[test]
     fn aliases_become_the_css_they_mean() {
         let text = css("box radius md shadow sm z 3 align center justify space-between\n");
-        assert!(text.contains("border-radius: md;"), "{text}");
-        assert!(text.contains("box-shadow: sm;"), "{text}");
-        assert!(text.contains("z-index: 3;"), "{text}");
-        assert!(text.contains("align-items: center;"), "{text}");
-        assert!(text.contains("justify-content: space-between;"), "{text}");
+        assert!(text.contains("border-radius: md;"), "{}", generated(&text));
+        assert!(text.contains("box-shadow: sm;"), "{}", generated(&text));
+        assert!(text.contains("z-index: 3;"), "{}", generated(&text));
+        assert!(text.contains("align-items: center;"), "{}", generated(&text));
+        assert!(text.contains("justify-content: space-between;"), "{}", generated(&text));
     }
 
     #[test]
     fn size_sets_both_dimensions() {
         let text = css("box size 2rem\n");
-        assert!(text.contains("width: 2rem;"), "{text}");
-        assert!(text.contains("height: 2rem;"), "{text}");
+        assert!(text.contains("width: 2rem;"), "{}", generated(&text));
+        assert!(text.contains("height: 2rem;"), "{}", generated(&text));
 
         let text = css("box size 100% 2rem\n");
-        assert!(text.contains("width: 100%;"), "{text}");
-        assert!(text.contains("height: 2rem;"), "{text}");
+        assert!(text.contains("width: 100%;"), "{}", generated(&text));
+        assert!(text.contains("height: 2rem;"), "{}", generated(&text));
     }
 
     #[test]
     fn a_bare_number_becomes_pixels_except_where_it_is_a_count() {
         let text = css("box gap 2 opacity 0.5 z 3 line-height 1.5\n");
-        assert!(text.contains("gap: 2px;"), "{text}");
-        assert!(text.contains("opacity: 0.5;"), "{text}");
-        assert!(text.contains("z-index: 3;"), "{text}");
-        assert!(text.contains("line-height: 1.5;"), "{text}");
+        assert!(text.contains("gap: 2px;"), "{}", generated(&text));
+        assert!(text.contains("opacity: 0.5;"), "{}", generated(&text));
+        assert!(text.contains("z-index: 3;"), "{}", generated(&text));
+        assert!(text.contains("line-height: 1.5;"), "{}", generated(&text));
     }
 
     #[test]
@@ -870,11 +914,11 @@ mod tests {
         let text = css("grid columns 2\n");
         assert!(
             text.contains("grid-template-columns: repeat(2, minmax(0, 1fr));"),
-            "{text}"
+            "{}", generated(&text)
         );
         // A template written out is left alone.
         let text = css("grid columns \"1fr 2fr\"\n");
-        assert!(text.contains("grid-template-columns: 1fr 2fr;"), "{text}");
+        assert!(text.contains("grid-template-columns: 1fr 2fr;"), "{}", generated(&text));
     }
 
     #[test]
@@ -882,11 +926,11 @@ mod tests {
         let source = "theme\n  colors\n    primary #5dade2\n    danger #c0392b\n  spacing\n    md 1rem\nbox color primary padding md\n";
         let (program, styles) = compiled(source);
         let text = styles.stylesheet(false);
-        assert!(text.contains("--color-primary: #5dade2;"), "{text}");
-        assert!(text.contains("--color-danger: #c0392b;"), "{text}");
-        assert!(text.contains("--space-md: 1rem;"), "{text}");
-        assert!(text.contains("color: var(--color-primary);"), "{text}");
-        assert!(text.contains("padding: var(--space-md);"), "{text}");
+        assert!(text.contains("--color-primary: #5dade2;"), "{}", generated(&text));
+        assert!(text.contains("--color-danger: #c0392b;"), "{}", generated(&text));
+        assert!(text.contains("--space-md: 1rem;"), "{}", generated(&text));
+        assert!(text.contains("color: var(--color-primary);"), "{}", generated(&text));
+        assert!(text.contains("padding: var(--space-md);"), "{}", generated(&text));
         assert_eq!(first(&program).class.as_deref(), Some("p1"));
     }
 
@@ -896,17 +940,18 @@ mod tests {
         let source =
             "theme\n  spacing\n    md 1rem\n  sizes\n    md 1.25rem\nbox padding md font-size md\n";
         let text = css(source);
-        assert!(text.contains("padding: var(--space-md);"), "{text}");
-        assert!(text.contains("font-size: var(--size-md);"), "{text}");
-        assert!(text.contains("--space-md: 1rem;"), "{text}");
-        assert!(text.contains("--size-md: 1.25rem;"), "{text}");
+        assert!(text.contains("padding: var(--space-md);"), "{}", generated(&text));
+        assert!(text.contains("font-size: var(--size-md);"), "{}", generated(&text));
+        assert!(text.contains("--space-md: 1rem;"), "{}", generated(&text));
+        assert!(text.contains("--size-md: 1.25rem;"), "{}", generated(&text));
     }
 
     #[test]
     fn a_word_the_theme_does_not_define_is_left_alone() {
         // `red` is a CSS keyword; inventing a variable for it would produce a
-        // colour that is not there.
-        let text = css("box color red\n");
+        // colour that is not there. The base stylesheet uses variables of its
+        // own, so only the generated rules are worth looking at.
+        let text = generated(&css("box color red\n"));
         assert!(text.contains("color: red;"), "{text}");
         assert!(!text.contains("var(--color"), "{text}");
     }
@@ -917,35 +962,35 @@ mod tests {
         let text = css(source);
         assert!(
             text.contains("@media (prefers-color-scheme: dark)"),
-            "{text}"
+            "{}", generated(&text)
         );
-        assert!(text.contains(":root:not(.light)"), "{text}");
-        assert!(text.contains(".dark {"), "{text}");
-        assert!(text.contains("--color-primary: #2e86c1;"), "{text}");
+        assert!(text.contains(":root:not(.light)"), "{}", generated(&text));
+        assert!(text.contains(".dark {"), "{}", generated(&text));
+        assert!(text.contains("--color-primary: #2e86c1;"), "{}", generated(&text));
     }
 
     #[test]
     fn a_pseudo_block_becomes_a_pseudo_selector() {
         let text = css("button color black\n  when hover\n    background red\n");
-        assert!(text.contains(".p1 {"), "{text}");
-        assert!(text.contains(".p1:hover {"), "{text}");
-        assert!(text.contains("background: red;"), "{text}");
+        assert!(text.contains(".p1 {"), "{}", generated(&text));
+        assert!(text.contains(".p1:hover {"), "{}", generated(&text));
+        assert!(text.contains("background: red;"), "{}", generated(&text));
     }
 
     #[test]
     fn focus_means_focus_visible() {
         let text = css("button\n  when focus\n    outline blue\n");
-        assert!(text.contains(".p1:focus-visible {"), "{text}");
+        assert!(text.contains(".p1:focus-visible {"), "{}", generated(&text));
     }
 
     #[test]
     fn a_breakpoint_block_goes_inside_a_media_query() {
         let text = css("stack gap 1rem\n  @tablet\n    gap 2rem\n");
-        assert!(text.contains("@media (min-width: 640px) {"), "{text}");
-        assert!(text.contains("  .p1 {"), "{text}");
-        assert!(text.contains("gap: 2rem;"), "{text}");
+        assert!(text.contains("@media (min-width: 640px) {"), "{}", generated(&text));
+        assert!(text.contains("  .p1 {"), "{}", generated(&text));
+        assert!(text.contains("gap: 2rem;"), "{}", generated(&text));
         // The unconditional rule is still outside the query.
-        assert!(text.contains("\n.p1 {\n  gap: 1rem;\n}"), "{text}");
+        assert!(text.contains("\n.p1 {\n  gap: 1rem;\n}"), "{}", generated(&text));
     }
 
     #[test]
@@ -956,7 +1001,7 @@ mod tests {
         assert_eq!(
             text.matches("@media (min-width: 640px)").count(),
             1,
-            "{text}"
+            "{}", generated(&text)
         );
     }
 
@@ -965,7 +1010,7 @@ mod tests {
         let source =
             "theme\n  breakpoints\n    huge 1800px\nbox color red\n  @huge\n    color blue\n";
         let text = css(source);
-        assert!(text.contains("@media (min-width: 1800px)"), "{text}");
+        assert!(text.contains("@media (min-width: 1800px)"), "{}", generated(&text));
     }
 
     #[test]
@@ -973,25 +1018,25 @@ mod tests {
         let text = css("box color red\n  @reduced-motion\n    transition none\n");
         assert!(
             text.contains("@media (prefers-reduced-motion: reduce)"),
-            "{text}"
+            "{}", generated(&text)
         );
-        assert!(text.contains("transition: none;"), "{text}");
+        assert!(text.contains("transition: none;"), "{}", generated(&text));
     }
 
     #[test]
     fn show_false_under_a_breakpoint_is_pure_css() {
         let text = css("box color red\n  @mobile\n    show false\n");
-        assert!(text.contains("display: none;"), "{text}");
+        assert!(text.contains("display: none;"), "{}", generated(&text));
     }
 
     #[test]
     fn layout_modifiers_become_flex_declarations() {
         let text = css("box fill\n");
-        assert!(text.contains("flex-grow: 1;"), "{text}");
-        assert!(text.contains("flex-basis: 0%;"), "{text}");
+        assert!(text.contains("flex-grow: 1;"), "{}", generated(&text));
+        assert!(text.contains("flex-basis: 0%;"), "{}", generated(&text));
         // The minimum sizes are what let a flex item actually shrink.
-        assert!(text.contains("min-width: 0;"), "{text}");
-        assert!(text.contains("min-height: 0;"), "{text}");
+        assert!(text.contains("min-width: 0;"), "{}", generated(&text));
+        assert!(text.contains("min-height: 0;"), "{}", generated(&text));
 
         assert!(css("box fill-x\n").contains("min-width: 0;"));
         assert!(!css("box fill-x\n").contains("min-height: 0;"));
@@ -1054,14 +1099,14 @@ mod tests {
         let text = css("box font \"Inter, system-ui, sans-serif\"\n");
         assert!(
             text.contains("font-family: Inter, system-ui, sans-serif;"),
-            "{text}"
+            "{}", generated(&text)
         );
     }
 
     #[test]
     fn content_keeps_its_quotes_because_css_needs_them() {
         let text = css("box content \"hello\"\n");
-        assert!(text.contains("content: \"hello\";"), "{text}");
+        assert!(text.contains("content: \"hello\";"), "{}", generated(&text));
     }
 
     #[test]
