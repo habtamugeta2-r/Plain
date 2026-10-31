@@ -906,10 +906,18 @@ pub const RESTRICTED_ATTRIBUTES: &[(&str, &[&str])] = &[
     ("max", &["input", "slider", "progress"]),
     ("step", &["input", "slider"]),
     ("multiple", &["select"]),
-    ("value", &["option", "input", "check", "radio", "slider", "progress"]),
+    (
+        "value",
+        &["option", "input", "check", "radio", "slider", "progress"],
+    ),
     ("rows", &["textarea"]),
     ("cols", &["textarea"]),
-    ("label", &["check", "radio", "toggle", "slider", "select", "option", "input", "textarea"]),
+    (
+        "label",
+        &[
+            "check", "radio", "toggle", "slider", "select", "option", "input", "textarea",
+        ],
+    ),
     ("alt", &["image"]),
     ("srcset", &["image"]),
     ("sizes", &["image"]),
