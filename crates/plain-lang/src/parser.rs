@@ -3602,8 +3602,8 @@ mod tests {
             .contains("color"));
     }
 
-#[test]
-        fn a_value_is_not_mistaken_for_the_next_property() {
+    #[test]
+    fn a_value_is_not_mistaken_for_the_next_property() {
         let program = ok("box text-align left\n");
         let element = first_element(&program);
         assert_eq!(prop_names(element), vec!["text-align"]);
