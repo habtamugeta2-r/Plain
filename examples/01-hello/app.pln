@@ -1,0 +1,18 @@
+-- Hello, Plain.
+--
+-- Nine lines of source: a page with two buttons and a sentence that knows how
+-- many times it has been read. Nothing here is a string of HTML, and nothing
+-- needs a build step of its own.
+
+let count = 0
+derive word = if count == 1 then "click" else "clicks"
+
+main
+  stack gap 1.5rem padding 2rem
+    heading "Hello, Plain"
+    text "You have clicked ~(count) ~(word)."
+    row gap 0.5rem
+      button "One more"
+        on click => count = count + 1
+      button "Start over"
+        on click => count = 0

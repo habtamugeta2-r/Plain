@@ -1,0 +1,40 @@
+-- A todo list that survives a reload.
+--
+-- `persist` keeps the list in storage, `each` renders it, `bind` ties a field
+-- and a checkbox to the data, and `fn` holds the two things that change it.
+-- The row is written where it is used: nothing about it is hidden.
+
+let todos = [] persist "plain-example-todos"
+let draft = ""
+let seq = 1
+derive remaining = todos.count(todo => not todo.done)
+derive status = if remaining == 0 then "All done" else "~(remaining) left"
+
+fn add()
+  if draft.trim().length > 0
+    todos = [...todos, record(id: seq, text: draft.trim(), done: false)]
+    seq = seq + 1
+    draft = ""
+
+fn remove(id)
+  todos = todos.filter(todo => todo.id != id)
+
+main
+  stack gap 1rem padding 1.5rem
+    heading "Today"
+    row gap 0.5rem
+      input bind draft label "What needs doing" fill
+      button "Add"
+        on click => add()
+    if todos.length == 0
+      text "Nothing here yet."
+    else
+      list
+        each todo, i in todos key todo.id
+          item
+            row gap 0.5rem align center
+              check bind todos[i].done label "~(todo.text)"
+              text "~(todo.text)"
+              button "Remove"
+                on click => remove(todo.id)
+    text "~(status)"
