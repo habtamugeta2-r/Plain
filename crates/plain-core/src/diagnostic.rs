@@ -65,7 +65,11 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn error(code: impl Into<String>, title: impl Into<String>, file: crate::span::FileId) -> Self {
+    pub fn error(
+        code: impl Into<String>,
+        title: impl Into<String>,
+        file: crate::span::FileId,
+    ) -> Self {
         Diagnostic {
             severity: Severity::Error,
             code: code.into(),
@@ -77,7 +81,11 @@ impl Diagnostic {
         }
     }
 
-    pub fn warning(code: impl Into<String>, title: impl Into<String>, file: crate::span::FileId) -> Self {
+    pub fn warning(
+        code: impl Into<String>,
+        title: impl Into<String>,
+        file: crate::span::FileId,
+    ) -> Self {
         Diagnostic {
             severity: Severity::Warning,
             code: code.into(),
@@ -121,7 +129,10 @@ impl Diagnostic {
         let file = match sources.get(self.file) {
             Some(f) => f,
             None => {
-                out.push_str(&format!("{} {}: {}\n", self.severity, self.code, self.title));
+                out.push_str(&format!(
+                    "{} {}: {}\n",
+                    self.severity, self.code, self.title
+                ));
                 return out;
             }
         };
@@ -166,7 +177,10 @@ impl Diagnostic {
 
         for extra in self.labels.iter().skip(1) {
             let (line, col) = file.line_col(extra.span.start);
-            out.push_str(&format!("\n  also at {}:{}: {}\n", line, col, extra.message));
+            out.push_str(&format!(
+                "\n  also at {}:{}: {}\n",
+                line, col, extra.message
+            ));
         }
 
         for note in &self.notes {

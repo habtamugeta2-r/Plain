@@ -66,7 +66,10 @@ impl SourceFile {
     /// Clamps a span into this file's bounds.
     pub fn clamp(&self, span: Span) -> Span {
         let len = self.text.len() as u32;
-        Span::new(span.start.min(len), span.end.min(len).max(span.start.min(len)))
+        Span::new(
+            span.start.min(len),
+            span.end.min(len).max(span.start.min(len)),
+        )
     }
 
     /// The text covered by `span`.
