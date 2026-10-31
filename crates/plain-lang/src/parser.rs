@@ -257,6 +257,39 @@ impl Parser {
         tables::MODIFIERS.contains(&name) || tables::is_property(name)
     }
 
+    /// True when the word at the cursor opens an expression rather than a
+    /// property: it is followed by a member, an index, a call, an operator, or
+    /// by the end of the line. `text user.name` is content; `colour red` is a
+    /// misspelt property.
+    fn expression_ahead(&self) -> bool {
+        let next = self.at(1);
+        match next.kind {
+            TokenKind::Dot
+            | TokenKind::DotDot
+            | TokenKind::LBracket
+            | TokenKind::LParen
+            | TokenKind::Newline
+            | TokenKind::Dedent
+            | TokenKind::Eof
+            | TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent
+            | TokenKind::Pipe
+            | TokenKind::EqEq
+            | TokenKind::BangEq
+            | TokenKind::Lt
+            | TokenKind::LtEq
+            | TokenKind::Gt
+            | TokenKind::GtEq
+            | TokenKind::Question => true,
+            // `and`, `or`, `not` and `then` arrive from the lexer as names.
+            TokenKind::Name => matches!(next.text.as_str(), "and" | "or" | "not" | "then"),
+            _ => false,
+        }
+    }
+
     /// True when a value can follow the current token on this line.
     ///
     /// Only a *hard* item keyword rules a value out. `text-align left` has a
@@ -1336,7 +1369,7 @@ impl Parser {
                         }
                         _ => {
                             self.parse_plain_item(
-                                host, component, mode, deco, span, &name, name_span,
+                                host, component, mode, deco, args, span, &name, name_span,
                             );
                         }
                     }
@@ -1366,6 +1399,7 @@ impl Parser {
         component: bool,
         mode: UiMode,
         deco: &mut Decorations,
+        args: &mut Vec<Expr>,
         span: &mut Span,
         name: &str,
         name_span: Span,
@@ -1495,6 +1529,15 @@ impl Parser {
             *span = span.merge(value.span());
             deco.props_named
                 .push((name_token.span, name_token.text, value));
+            return;
+        }
+
+        // Anything left is content: `text user.name`, `text count`,
+        // `text items.length`. A word with a value after it is a property the
+        // compiler has not heard of, and saying so beats quietly parsing two
+        // unrelated expressions.
+        if self.expression_ahead() {
+            self.parse_value_item(component, mode, deco, args, span, host);
             return;
         }
 
@@ -3530,6 +3573,36 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn an_identifier_is_content_but_a_word_with_a_value_is_a_property() {
+        // The commonest way to put a variable on the page is a bare name, and
+        // it must not be mistaken for a style property.
+        for (source, expected) in [
+            ("text user.name\n", "user.name"),
+            ("text count\n", "count"),
+            ("text items[0]\n", "items[0]"),
+            ("text count + 1\n", "count + 1"),
+            ("text a and b\n", "a and b"),
+            ("text greet(user.name)\n", "greet(user.name)"),
+        ] {
+            let program = ok(source);
+            let element = first_element(&program);
+            assert_eq!(element.args.len(), 1, "args for {source}");
+            assert_eq!(text_of(&element.args[0]), expected, "for {source}");
+            assert!(element.props.is_empty(), "props for {source}");
+        }
+
+        // A word with a value after it is still a property the compiler has not
+        // heard of, which is a more useful thing to be told.
+        let (_, diagnostics) = parse("box colour red\n");
+        assert!(codes(&diagnostics).contains(&"E130"));
+        assert!(diagnostics[0]
+            .suggestion
+            .as_deref()
+            .unwrap()
+            .contains("color"));
+    }
+
     fn a_value_is_not_mistaken_for_the_next_property() {
         let program = ok("box text-align left\n");
         let element = first_element(&program);
