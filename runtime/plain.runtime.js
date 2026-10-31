@@ -1340,6 +1340,53 @@ export function every(delay, fn) {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Components
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Read a prop.
+ *
+ * Generated code passes props as an object of accessors — `Card({ title: () =>
+ * "Hello" })` — and reads them with `P.prop(props, "title", () => "")`. The
+ * result is always an accessor, never a value, so reading it inside an effect
+ * keeps that effect subscribed to the parent: a prop is a wire, not a snapshot.
+ *
+ * A prop that was not passed, or that is currently `nothing`, gets `fallback`.
+ * The fallback is applied on every read rather than once at creation, so a prop
+ * that arrives later still shows up.
+ *
+ * A plain value is accepted too and wrapped in a constant accessor. That is what
+ * makes a component callable from ordinary JavaScript without a build step.
+ */
+export function prop(props, name, fallback) {
+  const given = props ? props[name] : undefined;
+  if (typeof given === 'function') {
+    if (!fallback) return given;
+    return () => {
+      const value = given();
+      return value === undefined ? fallback() : value;
+    };
+  }
+  if (given !== undefined) return () => given;
+  return fallback || (() => undefined);
+}
+
+/**
+ * Read the nodes a parent put in a slot.
+ *
+ * Children are built eagerly in the parent's own scope and handed down, so this
+ * only gives them back — a component cannot decide *when* to build them, only
+ * where to put them. `P.slot(props)` is the default slot; `P.slot(props, name)`
+ * is a named one, and an unfilled slot is empty rather than an error.
+ */
+export function slot(props, name) {
+  if (!props) return [];
+  if (name === undefined || name === 'children') return props.children || [];
+  const slots = props.slots;
+  return (slots && slots[name]) || [];
+}
+
+/* ------------------------------------------------------------------------- *
  * Public namespace
  * ------------------------------------------------------------------------- */
 
@@ -1377,6 +1424,9 @@ export const P = {
   focus,
   focusFirst,
   trapFocus,
+  // components
+  prop,
+  slot,
   // platform
   store,
   session,

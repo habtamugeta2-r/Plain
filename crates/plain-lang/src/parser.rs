@@ -3573,7 +3573,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn an_identifier_is_content_but_a_word_with_a_value_is_a_property() {
         // The commonest way to put a variable on the page is a bare name, and
         // it must not be mistaken for a style property.
@@ -3603,7 +3602,8 @@ mod tests {
             .contains("color"));
     }
 
-    fn a_value_is_not_mistaken_for_the_next_property() {
+#[test]
+        fn a_value_is_not_mistaken_for_the_next_property() {
         let program = ok("box text-align left\n");
         let element = first_element(&program);
         assert_eq!(prop_names(element), vec!["text-align"]);

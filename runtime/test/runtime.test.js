@@ -342,3 +342,111 @@ test('update cycles are detected rather than hanging', () => {
   assert.ok(errors.length > 0, 'a self-writing effect should be reported');
   assert.match(String(errors[0].message), /did not settle/);
 });
+
+test('prop stays reactive and falls back to its default', () => {
+  const title = P.signal('Ada');
+
+  // The shape generated code emits: props arrive as accessors.
+  const props = { title: () => title() };
+  const read = P.prop(props, 'title', () => 'untitled');
+  assert.equal(typeof read, 'function', 'a prop is a wire, not a snapshot');
+  assert.equal(read(), 'Ada');
+  title.set('Grace');
+  assert.equal(read(), 'Grace');
+
+  // Absent, and present but currently `nothing`.
+  assert.equal(P.prop({}, 'title', () => 'untitled')(), 'untitled');
+  assert.equal(P.prop({ title: () => undefined }, 'title', () => 'untitled')(), 'untitled');
+  assert.equal(P.prop(undefined, 'title', () => 'untitled')(), 'untitled');
+
+  // A plain value from ordinary JavaScript is wrapped rather than rejected, so a
+  // component stays callable without a build step.
+  assert.equal(P.prop({ title: 'Ada' }, 'title')(), 'Ada');
+  assert.equal(P.prop({ title: 0 }, 'title')(), 0);
+  assert.equal(P.prop({ title: false }, 'title')(), false);
+
+  // With no fallback a missing prop reads as `nothing`.
+  assert.equal(P.prop({}, 'title')(), undefined);
+
+  // Reading a prop inside an effect subscribes that effect to the parent.
+  const seen = [];
+  P.scope(() => {
+    P.effect(() => seen.push(P.prop(props, 'title', () => 'untitled')()));
+  });
+  assert.deepEqual(seen, ['Grace']);
+  title.set('Katherine');
+  flush();
+  assert.deepEqual(seen, ['Grace', 'Katherine']);
+});
+
+test('slot hands back the nodes the parent built', () => {
+  const child = P.el('p');
+  const header = P.el('span');
+  const props = { children: [child], slots: { header: [header] } };
+  assert.deepEqual(P.slot(props), [child]);
+  assert.deepEqual(P.slot(props, 'children'), [child]);
+  assert.deepEqual(P.slot(props, 'header'), [header]);
+  assert.deepEqual(P.slot(props, 'footer'), [], 'an unfilled slot is empty, not an error');
+  assert.deepEqual(P.slot(undefined), []);
+  assert.deepEqual(P.slot({}), []);
+});
+
+test('a component with props and two slots composes and updates', () => {
+  // What the compiler emits for:
+  //
+  //   component Card(title: string)
+  //     stack gap 1rem
+  //       heading "~(title)"
+  //         level 2
+  //       slot header
+  //       children
+  function Card(props) {
+    const title = P.prop(props, 'title', () => '');
+    const box = P.el('div', 'p1');
+    const heading = P.el('h2', 'p2');
+    P.setText(heading, title);
+    P.append(box, heading);
+    P.append(box, P.slot(props, 'header'));
+    P.append(box, P.slot(props));
+    return box;
+  }
+
+  const host = document.createElement('div');
+  document.body.append(host);
+  const name = P.signal('Ada');
+
+  const dispose = P.mount(host, () => {
+    const root = P.el('div', 'plain-root');
+    const label = P.el('span');
+    P.setText(label, () => `Signed in as ${name()}`);
+    P.append(
+      root,
+      Card({
+        title: () => `Hello ${name()}`,
+        slots: { header: [label] },
+        children: [P.el('p', 'p3')],
+      }),
+    );
+    return root;
+  });
+
+  assert.equal(host.querySelector('h2').textContent, 'Hello Ada');
+  assert.equal(host.querySelector('span').textContent, 'Signed in as Ada');
+  assert.equal(host.querySelectorAll('p.p3').length, 1);
+
+  // The prop is a wire: writing the parent's signal updates the child.
+  name.set('Grace');
+  flush();
+  assert.equal(host.querySelector('h2').textContent, 'Hello Grace');
+  assert.equal(host.querySelector('span').textContent, 'Signed in as Grace');
+
+  dispose();
+  name.set('Katherine');
+  flush();
+  assert.equal(
+    host.querySelector('h2').textContent,
+    'Hello Grace',
+    'a disposed component stops listening',
+  );
+  host.remove();
+});
