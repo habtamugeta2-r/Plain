@@ -989,39 +989,52 @@ mod tests {
 
     #[test]
     fn strings_decode_escapes() {
-        assert_eq!(string_parts(r#"text "a\nb\"c""#), vec!["text:a
-b"c"]);
+        // The Plain source is: text "a\nb\"c" — a newline escape and a quote
+        // escape. `r##"..."##` keeps the backslashes exactly as written.
+        let source = r##"text "a\nb\"c""##;
+        assert_eq!(string_parts(source), vec!["text:a\nb\"c"]);
     }
 
     #[test]
     fn strings_split_interpolations() {
+        let source = r##"text "Count: ~(count + 1) items""##;
         assert_eq!(
-            string_parts(r#"text "Count: ~(count + 1) items""#),
+            string_parts(source),
             vec!["text:Count: ", "interp", "text: items"]
         );
-        assert_eq!(interpolation_source(r#"text "Count: ~(count + 1) items""#), vec!["count + 1"]);
+        assert_eq!(interpolation_source(source), vec!["count + 1"]);
     }
 
     #[test]
     fn interpolation_spans_point_into_the_real_file() {
-        let source = r#"text "~(count)""#;
+        let source = r##"text "~(count)""##;
         let (tokens, errors) = lex_source(source);
         assert!(errors.is_empty(), "{errors:?}");
-        let name = tokens.iter().find(|t| t.text == "count").unwrap();
+        let name = tokens.iter().find(|token| token.text == "count").unwrap();
         assert_eq!(&source[name.span.start as usize..name.span.end as usize], "count");
     }
 
     #[test]
     fn interpolation_can_contain_a_string_and_nested_parens() {
-        assert_eq!(
-            interpolation_source(r#""~(if n == 1 then "item" else "items")""#),
-            vec![r#"if n == 1 then "item" else "items""#]
-        );
+        let source = r##"text "~(if n == 1 then "item" else "items")""##;
+        let (tokens, errors) = lex_source(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind).collect();
+        let count = |wanted: TokenKind| {
+            kinds.iter().filter(|kind| **kind == wanted).count()
+        };
+        // The inner string is lexed inline, so it gets its own StrStart/StrEnd
+        // rather than being re-lexed from a copied substring.
+        assert_eq!(count(TokenKind::StrStart), 2);
+        assert_eq!(count(TokenKind::StrEnd), 2);
+        assert_eq!(count(TokenKind::InterpStart), 1);
+        assert_eq!(count(TokenKind::InterpEnd), 1);
+        assert!(tokens.iter().any(|token| token.text == "item"));
     }
 
     #[test]
     fn a_double_hyphen_inside_a_string_is_not_a_comment() {
-        assert_eq!(string_parts(r#"text "a--b""#), vec!["text:a--b"]);
+        assert_eq!(string_parts(r##"text "a--b""##), vec!["text:a--b"]);
     }
 
     #[test]

@@ -775,7 +775,7 @@ pub fn suggest_property(name: &str) -> Option<&'static str> {
             None => true,
         };
         if distance <= 2 && better {
-            best = Some((candidate, distance));
+            best = Some((*candidate, distance));
         }
     }
     best.map(|(candidate, _)| candidate)

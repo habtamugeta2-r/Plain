@@ -3001,7 +3001,7 @@ fn closest_name(target: &str, candidates: &'static [&'static str]) -> Option<&'s
             None => true,
         };
         if distance <= 2 && better {
-            best = Some((candidate, distance));
+            best = Some((*candidate, distance));
         }
     }
     best.map(|(candidate, _)| candidate)
