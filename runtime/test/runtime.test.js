@@ -323,10 +323,18 @@ test('standard library helpers behave', () => {
   assert.equal(P.parseUrl('https://example.com/x?q=1').query.q, '1');
 });
 
-test('device exposes reactive viewport state', () => {
-  assert.equal(typeof P.device.width, 'function');
-  assert.equal(typeof P.device.mobile(), 'boolean');
-  assert.equal(typeof P.device.darkMode(), 'boolean');
+test('device reads like a value and still subscribes', () => {
+  // Fields are getters over accessors, so `device.width` needs no parentheses.
+  assert.equal(typeof P.device.width, 'number');
+  assert.equal(typeof P.device.mobile, 'boolean');
+  assert.equal(typeof P.device.darkMode, 'boolean');
+  assert.equal(typeof P.device.language, 'string');
+
+  const seen = [];
+  P.scope(() => {
+    P.effect(() => seen.push(P.device.width));
+  });
+  assert.equal(seen.length, 1, 'reading device.width inside an effect runs it');
 });
 
 test('update cycles are detected rather than hanging', () => {
@@ -449,4 +457,56 @@ test('a component with props and two slots composes and updates', () => {
     'a disposed component stops listening',
   );
   host.remove();
+});
+
+test('range is inclusive and counts down', () => {
+  assert.deepEqual(P.range(1, 3), [1, 2, 3]);
+  assert.deepEqual(P.range(3, 1), [3, 2, 1]);
+  assert.deepEqual(P.range(2, 2), [2]);
+  assert.deepEqual(P.range(0, 10, 5), [0, 5, 10]);
+  // A range big enough to hang the tab is refused rather than built.
+  const errors = [];
+  P.onError((error) => errors.push(error));
+  assert.deepEqual(P.range(1, 1000000), []);
+  assert.match(errors[0].message, /would produce 1000000 items/);
+  P.onError(null);
+});
+
+test('assign writes a path and copies every level it touches', () => {
+  const user = P.signal({ name: 'Ada', address: { city: 'London' } });
+  const before = user();
+
+  P.assign(user, ['name'], 'Grace');
+  assert.equal(user().name, 'Grace');
+  assert.equal(user().address.city, 'London');
+  assert.equal(before.name, 'Ada', 'the old value is not mutated');
+  assert.equal(user().address, before.address, 'a level off the path is shared');
+
+  const addressBefore = user().address;
+  P.assign(user, ['address', 'city'], 'Paris');
+  assert.equal(user().address.city, 'Paris');
+  assert.equal(addressBefore.city, 'London');
+  assert.notEqual(user().address, addressBefore, 'a level on the path is copied');
+
+  const items = P.signal([
+    { id: 1, done: false },
+    { id: 2, done: false },
+  ]);
+  P.assign(items, [1, 'done'], true);
+  assert.deepEqual(
+    items().map((item) => item.done),
+    [false, true],
+  );
+  assert.equal(items()[0].done, false, 'the untouched row is the same object');
+
+  // Writing the whole signal is still one call.
+  P.assign(user, [], { name: 'Katherine' });
+  assert.deepEqual(user(), { name: 'Katherine' });
+
+  // A target that is not reactive state is reported, not thrown.
+  const errors = [];
+  P.onError((error) => errors.push(error));
+  P.assign({ name: 'Ada' }, ['name'], 'Grace');
+  assert.match(errors[0].message, /not reactive state/);
+  P.onError(null);
 });

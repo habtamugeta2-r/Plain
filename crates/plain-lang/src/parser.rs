@@ -258,14 +258,16 @@ impl Parser {
     }
 
     /// True when the word at the cursor opens an expression rather than a
-    /// property: it is followed by a member, an index, a call, an operator, or
-    /// by the end of the line. `text user.name` is content; `colour red` is a
-    /// misspelt property.
+    /// property: it is followed by a member, an index, a call, an arrow, an
+    /// operator, or by the end of the line. `text user.name` and `text x => x`
+    /// are content; `colour red` is a misspelt property.
     fn expression_ahead(&self) -> bool {
         let next = self.at(1);
         match next.kind {
             TokenKind::Dot
             | TokenKind::DotDot
+            | TokenKind::Arrow
+            | TokenKind::Ellipsis
             | TokenKind::LBracket
             | TokenKind::LParen
             | TokenKind::Newline
@@ -1411,6 +1413,13 @@ impl Parser {
                 *span = span.merge(node.span());
                 deco.children.push(node);
             }
+            return;
+        }
+
+        // `if` with a `then` on the same line is an expression that produces a
+        // value, not a control block: `text if count == 1 then "one" else "many"`.
+        if name == "if" && self.conditional_expression_ahead() {
+            self.parse_value_item(component, mode, deco, args, span, host);
             return;
         }
 
@@ -3401,8 +3410,8 @@ fn looks_like_content(kind: TokenKind) -> bool {
     )
 }
 
-/// Renders a number without a trailing `.0`, for media queries.
-fn trim_number(value: f64) -> String {
+/// Renders a number the way Plain wrote it: `2` and not `2.0`.
+pub(crate) fn trim_number(value: f64) -> String {
     if value.fract() == 0.0 {
         format!("{}", value as i64)
     } else {

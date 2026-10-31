@@ -268,7 +268,12 @@ const UNITLESS = new Set([
   'animation-iteration-count',
 ]);
 
-function text(value) {
+/**
+ * The string a value shows as. `nothing` and `null` show as nothing at all,
+ * which is why a page never prints "undefined" where a value has not arrived
+ * yet.
+ */
+export function text(value) {
   return value === null || value === undefined ? '' : String(value);
 }
 
@@ -689,7 +694,7 @@ function makeDevice() {
     });
   }
 
-  return {
+  const state = {
     width,
     height,
     online,
@@ -705,6 +710,15 @@ function makeDevice() {
     language: signal(typeof navigator === 'undefined' ? 'en-US' : navigator.language || 'en-US'),
     pixelRatio: signal(hasWindow && window.devicePixelRatio ? window.devicePixelRatio : 1),
   };
+
+  // Every field is a getter over its accessor, so `device.width` reads like a
+  // plain value and still subscribes whatever effect read it. Plain puts no
+  // parentheses on the page, and neither should the viewport.
+  const api = {};
+  for (const name of Object.keys(state)) {
+    Object.defineProperty(api, name, { get: state[name], enumerable: true });
+  }
+  return api;
 }
 
 /** Reactive viewport, connectivity, colour-scheme and motion-preference state. */
@@ -1386,6 +1400,78 @@ export function slot(props, name) {
   return (slots && slots[name]) || [];
 }
 
+/**
+ * An inclusive range: `each page in 1..10` gives ten rows, and `10..1` counts
+ * down. A range is materialised when it is read because `each` needs an array,
+ * so it is meant for pagination, star ratings and skeleton rows — not for
+ * counting to a million. A range that big is refused with an error instead of
+ * hanging the tab.
+ */
+export function range(from, to, step) {
+  const start = Number(from) || 0;
+  const end = Number(to) || 0;
+  const by = Math.abs(Number(step)) || 1;
+  const count = Math.floor(Math.abs(end - start) / by) + 1;
+  if (count > MAX_RANGE) {
+    reportError(
+      new Error(
+        `range ${start}..${end} would produce ${count} items; ` +
+          `Plain refuses to build more than ${MAX_RANGE}`,
+      ),
+    );
+    return [];
+  }
+  const out = [];
+  if (start <= end) for (let i = start; i <= end; i += by) out.push(i);
+  else for (let i = start; i >= end; i -= by) out.push(i);
+  return out;
+}
+
+/** The largest range `each` will build. */
+const MAX_RANGE = 100000;
+
+function setIn(node, keys, depth, value) {
+  const key = keys[depth];
+  const child =
+    depth === keys.length - 1
+      ? value
+      : setIn(node == null ? undefined : node[key], keys, depth + 1, value);
+  if (Array.isArray(node)) {
+    const copy = node.slice();
+    copy[Number(key)] = child;
+    return copy;
+  }
+  const copy = node && typeof node === 'object' ? Object.assign({}, node) : {};
+  copy[key] = child;
+  return copy;
+}
+
+/**
+ * Write to a path inside reactive state.
+ *
+ * `user.name = "Ada"` becomes `P.assign(user, ["name"], "Ada")` and
+ * `items[i].done = true` becomes `P.assign(items, [i(), "done"], true)`.
+ *
+ * Values are treated as immutable: every level on the way down is copied and the
+ * root signal is written once. Nothing that already read the old value sees it
+ * change underneath, which is what keeps derived values and list rows honest —
+ * and what makes a change detectable at all, since a signal that is handed the
+ * same object back has nothing to report.
+ */
+export function assign(target, keys, value) {
+  if (!target || typeof target.set !== 'function') {
+    reportError(new Error('cannot assign to something that is not reactive state'));
+    return value;
+  }
+  if (!keys || keys.length === 0) {
+    target.set(value);
+    return value;
+  }
+  const next = setIn(target(), keys, 0, value);
+  target.set(next);
+  return next;
+}
+
 /* ------------------------------------------------------------------------- *
  * Public namespace
  * ------------------------------------------------------------------------- */
@@ -1427,6 +1513,8 @@ export const P = {
   // components
   prop,
   slot,
+  range,
+  assign,
   // platform
   store,
   session,
@@ -1436,6 +1524,7 @@ export const P = {
   after,
   every,
   onError,
+  text,
   // standard library
   str,
   list,
