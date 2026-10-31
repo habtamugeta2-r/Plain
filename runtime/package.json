@@ -1,0 +1,15 @@
+{
+  "name": "@plain/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plain language runtime: fine-grained reactivity, DOM construction and the standard library",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "plain.runtime.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  }
+}
