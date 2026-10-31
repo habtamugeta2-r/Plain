@@ -60,7 +60,7 @@ impl SourceFile {
         } else {
             self.text.len()
         };
-        self.text[start..end].trim_end_matches(|c| c == '\r' || c == '\n')
+        self.text[start..end].trim_end_matches(['\r', '\n'])
     }
 
     /// Clamps a span into this file's bounds.

@@ -561,8 +561,8 @@ impl Lexer {
                             format!("`\\{escape}` is not an escape sequence Plain knows"),
                             self.span(self.pos - 1, self.pos + 1),
                         )
-                        .note("Supported escapes: \\n \\t \\r \\0 \\\\ \\" \\' \\~")
-                        .suggest(format!("Write `\\\\{escape}` to get a literal backslash."));
+                        .note("Supported escapes: \\n \\t \\r \\0 \\\\ \\\" \\' \\~")
+                        .suggest("Write the character without the backslash, or use one of the escapes above.");
                         buf.push(escape);
                         self.pos += 1;
                     }
