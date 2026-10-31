@@ -936,7 +936,10 @@ pub const RESTRICTED_ATTRIBUTES: &[(&str, &[&str])] = &[
     ("datetime", &["time"]),
     ("level", &["heading"]),
     ("type", &["input", "button", "link", "list", "item"]),
-    ("name", &["input", "button", "form", "select", "textarea", "option"]),
+    (
+        "name",
+        &["input", "button", "form", "select", "textarea", "option"],
+    ),
 ];
 
 /// True when `property` is an HTML attribute on `element`.
