@@ -236,10 +236,8 @@ impl Checker {
         }
         let mut slots = Vec::new();
         collect_slots(&component.body, &mut slots);
-        self.components.insert(
-            component.name.clone(),
-            ComponentInfo { props, slots },
-        );
+        self.components
+            .insert(component.name.clone(), ComponentInfo { props, slots });
     }
 
     fn component(&mut self, component: &mut Component) {
@@ -331,7 +329,8 @@ impl Checker {
     /// The nearest declared name or built-in, close enough to be worth offering.
     fn closest(&self, name: &str) -> Option<String> {
         let letters: Vec<char> = name.chars().collect();
-        let mut candidates: Vec<String> = self.scope.names().iter().map(|n| n.to_string()).collect();
+        let mut candidates: Vec<String> =
+            self.scope.names().iter().map(|n| n.to_string()).collect();
         candidates.extend(tables::BUILTINS.iter().map(|(plain, _)| plain.to_string()));
         closest_of(name, &candidates).map(|found| found.to_string())
     }
@@ -385,7 +384,10 @@ impl Checker {
         self.expression(&declaration.value);
         if let Some(persist) = &declaration.persist {
             match &persist.key {
-                Expr::Str(parts, _) if parts.iter().all(|part| matches!(part, crate::ast::StrPart::Text(_))) => {}
+                Expr::Str(parts, _)
+                    if parts
+                        .iter()
+                        .all(|part| matches!(part, crate::ast::StrPart::Text(_))) => {}
                 other => {
                     let span = other.span();
                     self.error(
@@ -771,7 +773,11 @@ impl Checker {
             "image" => "an alternative text",
             _ => "a name",
         };
-        let code = if element.name == "image" { "E202" } else { "E201" };
+        let code = if element.name == "image" {
+            "E202"
+        } else {
+            "E201"
+        };
         self.error(
             code,
             format!("this `{}` has no accessible name", element.name),
@@ -807,11 +813,7 @@ impl Checker {
         // Inside a component the writer may be filling a slot that lands in the
         // right place, so this is a warning rather than an error.
         let inside_component = self.in_component;
-        let title = format!(
-            "`{}` belongs inside {}",
-            element.name,
-            list_of(allowed)
-        );
+        let title = format!("`{}` belongs inside {}", element.name, list_of(allowed));
         let note = "A browser moves an element it does not expect out of the table or list, which breaks the layout and, for a table, the meaning of the rows.";
         let suggestion = format!("Put it inside {}.", list_of(allowed));
         if inside_component {
@@ -833,7 +835,9 @@ impl Checker {
             names.sort_unstable();
             let suggestion = match closest_of(&invocation.name, &names) {
                 Some(candidate) => format!("Did you mean `{candidate}`?"),
-                None if names.is_empty() => "No component is declared in this file yet.".to_string(),
+                None if names.is_empty() => {
+                    "No component is declared in this file yet.".to_string()
+                }
                 None => format!("The components in this file are {}.", list_of(&names)),
             };
             self.error(
@@ -1126,10 +1130,7 @@ mod tests {
 
     fn titles(source: &str) -> Vec<String> {
         let (mut program, _) = parse_source(FileId(0), source);
-        check(&mut program)
-            .into_iter()
-            .map(|d| d.title)
-            .collect()
+        check(&mut program).into_iter().map(|d| d.title).collect()
     }
 
     fn clean(source: &str) {
@@ -1250,7 +1251,9 @@ mod tests {
 
     #[test]
     fn a_prop_the_component_does_not_have_is_reported() {
-        let found = codes("component Card(title: string)\n  text \"~(title)\"\nmain\n  Card(titel: \"x\")\n");
+        let found = codes(
+            "component Card(title: string)\n  text \"~(title)\"\nmain\n  Card(titel: \"x\")\n",
+        );
         assert!(found.contains(&"E204".to_string()), "{found:?}");
         clean("component Card(title: string)\n  text \"~(title)\"\nmain\n  Card(title: \"x\")\n");
     }
@@ -1266,10 +1269,10 @@ mod tests {
 
     #[test]
     fn too_many_positional_props_are_reported() {
-        assert!(
-            codes("component Card(title: string)\n  text \"~(title)\"\nmain\n  Card \"a\" \"b\"\n")
-                .contains(&"E212".to_string())
-        );
+        assert!(codes(
+            "component Card(title: string)\n  text \"~(title)\"\nmain\n  Card \"a\" \"b\"\n"
+        )
+        .contains(&"E212".to_string()));
     }
 
     #[test]
@@ -1324,10 +1327,7 @@ mod tests {
 
     #[test]
     fn a_storage_key_has_to_be_literal() {
-        assert!(
-            codes("let key = \"k\"\nlet saved = 0 persist key\n")
-                .contains(&"E214".to_string())
-        );
+        assert!(codes("let key = \"k\"\nlet saved = 0 persist key\n").contains(&"E214".to_string()));
         clean("let saved = 0 persist \"saved\"\n");
     }
 
@@ -1335,15 +1335,14 @@ mod tests {
     fn javascript_globals_are_reachable_and_typos_are_not() {
         clean("box\n  on click => console.log(\"hi\")\n");
         clean("let width = window.innerWidth\n");
-        assert!(
-            codes("box\n  on click => consle.log(\"hi\")\n")
-                .contains(&"E210".to_string())
-        );
+        assert!(codes("box\n  on click => consle.log(\"hi\")\n").contains(&"E210".to_string()));
     }
 
     #[test]
     fn an_each_binds_its_row_and_its_index() {
-        clean("let todos = [1]\nlist\n  each todo, i in todos key todo\n    item \"~(i) ~(todo)\"\n");
+        clean(
+            "let todos = [1]\nlist\n  each todo, i in todos key todo\n    item \"~(i) ~(todo)\"\n",
+        );
         assert!(
             codes("let todos = [1]\nlist\n  each todo in todos\n    item \"~(nope)\"\n")
                 .contains(&"E210".to_string())

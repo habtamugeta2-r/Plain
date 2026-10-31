@@ -71,12 +71,7 @@ fn run(request: &Request, write: bool) -> Result<ExitCode, Usage> {
     let entry = entry_point(&request.paths)?;
     let source = match fs::read_to_string(&entry) {
         Ok(source) => source,
-        Err(error) => {
-            return Err(Usage(format!(
-                "cannot read {}: {error}",
-                entry.display()
-            )))
-        }
+        Err(error) => return Err(Usage(format!("cannot read {}: {error}", entry.display()))),
     };
 
     let name = entry.display().to_string();
@@ -128,20 +123,12 @@ fn emit(bundle: &Bundle, out_dir: &str) -> Result<(), Usage> {
     for (name, contents) in &bundle.files {
         let path = root.join(name);
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| {
-                Usage(format!(
-                    "cannot create {}: {error}",
-                    parent.display()
-                ))
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|error| Usage(format!("cannot create {}: {error}", parent.display())))?;
         }
         fs::write(&path, contents)
             .map_err(|error| Usage(format!("cannot write {}: {error}", path.display())))?;
-        println!(
-            "plain: wrote {} ({})",
-            path.display(),
-            size(contents.len())
-        );
+        println!("plain: wrote {} ({})", path.display(), size(contents.len()));
     }
     Ok(())
 }

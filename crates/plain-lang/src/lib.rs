@@ -168,9 +168,7 @@ pub fn has_errors(diagnostics: &[Diagnostic]) -> bool {
 /// than no link.
 fn document(program: &ast::Program, options: &Options) -> String {
     let skip = if has_main(&program.body) {
-        format!(
-            "    <a class=\"pl-skip\" href=\"#{MAIN_ID}\">Skip to content</a>\n"
-        )
+        format!("    <a class=\"pl-skip\" href=\"#{MAIN_ID}\">Skip to content</a>\n")
     } else {
         String::new()
     };
@@ -213,9 +211,7 @@ fn escape(text: &str) -> String {
 
 fn has_main(nodes: &[ast::Node]) -> bool {
     nodes.iter().any(|node| match node {
-        ast::Node::Element(element) => {
-            element.def.tag == "main" || has_main(&element.children)
-        }
+        ast::Node::Element(element) => element.def.tag == "main" || has_main(&element.children),
         ast::Node::Use(invocation) => has_main(&invocation.children),
         ast::Node::If(condition) => {
             condition.branches.iter().any(|(_, body)| has_main(body))
