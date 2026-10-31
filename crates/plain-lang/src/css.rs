@@ -991,7 +991,8 @@ mod tests {
         // `red` is a CSS keyword; inventing a variable for it would produce a
         // colour that is not there. The base stylesheet uses variables of its
         // own, so only the generated rules are worth looking at.
-        let text = generated(&css("box color red\n"));
+        let sheet = css("box color red\n");
+        let text = generated(&sheet);
         assert!(text.contains("color: red;"), "{text}");
         assert!(!text.contains("var(--color"), "{text}");
     }

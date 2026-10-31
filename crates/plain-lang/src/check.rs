@@ -650,8 +650,13 @@ impl Checker {
         if !unresolved || self.theme_breakpoints.iter().any(|token| token == name) {
             return;
         }
-        let mut known: Vec<&str> = tables::BREAKPOINTS.iter().map(|(key, _)| *key).collect();
-        known.extend(self.theme_breakpoints.iter().map(String::as_str));
+        // Owned, because reporting borrows the checker mutably and the list of
+        // candidates has to outlive that call.
+        let mut known: Vec<String> = tables::BREAKPOINTS
+            .iter()
+            .map(|(key, _)| (*key).to_string())
+            .collect();
+        known.extend(self.theme_breakpoints.iter().cloned());
         self.error(
             "E215",
             format!("`@{name}` is not a breakpoint Plain knows"),
@@ -662,7 +667,7 @@ impl Checker {
             Some(candidate) => format!("Did you mean `@{candidate}`?"),
             None => format!(
                 "The built-in breakpoints are {}, and the theme can add more: `theme\n  breakpoints\n    {name} 1800px`.",
-                list_of(&tables::BREAKPOINTS.iter().map(|(key, _)| *key).collect::<Vec<_>>())
+                list_of(&known)
             ),
         });
     }
